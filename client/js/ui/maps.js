@@ -22,7 +22,7 @@ const OBJ_DOT = { water: '#7fe8ff', fuse: '#ffb030', box: '#ffffff', keypad: '#f
 
 
 export function toggleBigMap() {
-  if (!UP.map && !spec.dead && !S.admin) { toast('У вас нет улучшенной карты. Она может лежать где-то на 1 уровне.', 3200); return; }
+  if (!UP.map && !spec.dead && !S.admin) { toast('У вас нет улучшенной карты. Её можно найти на «Жёлтых комнатах» или на парковке.', 3200); return; }
   S.bigOn ? closeBigMap() : openBigMap();
   // призраку (и хосту для телепорта) нужен курсор, чтобы кликать по карте
   if ((spec.dead || S.adminClick) && S.bigOn) { S.ghostCursor = true; document.exitPointerLock(); }
@@ -129,7 +129,7 @@ export function drawMinimap() {
     }
   }
   objDots(mg, X, Y, UP.map ? 2.8 : 3.6, UP.map ? 4 : 5);
-  if (UP.map) mobDots(mg, X, Y, 3.4, 0.9);
+  if (UP.map || performance.now() / 1000 < (S.cctvUntil || 0)) mobDots(mg, X, Y, 3.4, 0.9); // камеры наблюдения тоже показывают существ
   mg.globalAlpha = 1;
   for (const r of remotes.values()) {
     if (!r.seen) continue;
@@ -142,7 +142,8 @@ export function drawMinimap() {
   if (FL.on) { mg.fillStyle = 'rgba(255,240,170,.16)'; mg.beginPath(); mg.moveTo(0, 0); mg.arc(0, 0, s * 0.45, -Math.PI / 2 - 0.5, -Math.PI / 2 + 0.5); mg.closePath(); mg.fill(); }
   mg.fillStyle = '#fff'; mg.beginPath(); mg.moveTo(0, -7); mg.lineTo(5, 6); mg.lineTo(-5, 6); mg.closePath(); mg.fill();
   mg.restore();
-  $('mmMode').textContent = (map.F > 1 ? `ЭТАЖ ${fl + 1}/${map.F} · ` : '') + (UP.map ? 'КАРТА+ · Р16' : 'РАДИУС 9');
+  const cam = performance.now() / 1000 < (S.cctvUntil || 0);
+  $('mmMode').textContent = (map.F > 1 ? `ЭТАЖ ${fl + 1}/${map.F} · ` : '') + (UP.map ? 'КАРТА+ · Р16' : 'РАДИУС 9') + (cam ? ' · КАМЕРЫ' : '');
   $('mmMode').className = UP.map ? 'up' : '';
 }
 

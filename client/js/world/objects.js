@@ -1,7 +1,8 @@
 // Интерактивные объекты уровня: предметы, щиток, рычаги, дверь…
 import * as THREE from 'three';
 import { BR, TILE, rand } from '../core/util.js';
-import { S } from '../core/state.js';
+import { FL, S } from '../core/state.js';
+import { camera } from '../render/scene.js';
 import { basic, glowSprite, lam, textPlane } from '../render/textures.js';
 import { G, H, map, objs } from './world.js';
 import { bx, cy } from './props.js';
@@ -66,6 +67,11 @@ export function createObj(o) {
       m.position.set(o.x, 1.6, o.z);
       m.rotation.y = Math.atan2(o.nx, o.nz);
       m.rotation.z = rand(-0.08, 0.08);
+      if (o.uv) { // люминесцентная краска: зелёное свечение, видно только в луче фонаря
+        m.material.color.setHex(0x60ff9a); m.material.fog = false; m.material.opacity = 0; m.material.transparent = true;
+        m.material.blending = THREE.AdditiveBlending; m.material.depthWrite = false;
+        rec.uvMat = m.material;
+      }
       grp.add(m);
       break;
     }
@@ -276,6 +282,104 @@ export function createObj(o) {
       grp.position.set(o.x, 0, o.z);
       break;
     }
+    case 'medkit': {
+      grp.add(bx(0.42, 0.28, 0.22, lam(0xf2f2ee, 0x202020), 0, 0, 0), bx(0.06, 0.18, 0.225, basic(0xd42020), 0, 0, 0), bx(0.18, 0.06, 0.225, basic(0xd42020), 0, 0, 0),
+        bx(0.2, 0.04, 0.04, lam(0x333333), 0, 0.16, 0), glowSprite(0xff5050, 1.2, 0.4));
+      grp.position.set(o.x, 1.0, o.z); rec.bob = true;
+      break;
+    }
+    case 'altar': {
+      const stone = lam(0x3c3a36, 0x0a0806);
+      grp.add(cy(0.7, 0.85, 0.9, stone, 0, 0.45, 0, 8), cy(0.55, 0.6, 0.12, lam(0x55504a), 0, 0.96, 0, 8));
+      const flame = glowSprite(0xffc070, 2.2, 0.7); flame.position.y = 1.4; grp.add(flame);
+      for (let k = 0; k < 5; k++) { const a = k / 5 * Math.PI * 2; grp.add(cy(0.04, 0.05, 0.25, lam(0xe8dcc0, 0x302010), Math.cos(a) * 0.45, 1.15, Math.sin(a) * 0.45, 6)); }
+      const lightA = new THREE.PointLight(0xffb060, 2.5, 9, 1.5); lightA.position.y = 1.6; grp.add(lightA);
+      grp.position.set(o.x, 0, o.z);
+      rec.parts = { flame, light: lightA };
+      break;
+    }
+    case 'switch': {
+      // удерживаемый переключатель: рубильник, генератор, плита, кнопка, стойка ресепшена
+      const st = o.style || 'button';
+      const lampMat = new THREE.MeshBasicMaterial({ color: 0x661010 });
+      let lampM;
+      if (st === 'plate') {
+        grp.add(bx(2.0, 0.1, 2.0, lam(0x3a3d42), 0, 0.05, 0));
+        const top = bx(1.6, 0.12, 1.6, new THREE.MeshLambertMaterial({ color: 0x884422, emissive: 0x331100 }), 0, 0.08, 0);
+        grp.add(top); rec.parts.top = top;
+        lampM = bx(0.3, 0.05, 0.3, lampMat, 0, 0.16, 0);
+      } else if (st === 'generator') {
+        grp.add(bx(1.6, 1.0, 0.9, lam(0x5a6a2a, 0x0a0c04), 0, 0.5, 0), bx(1.4, 0.15, 0.8, lam(0x2a2e22), 0, 1.07, 0),
+          cy(0.06, 0.06, 0.7, lam(0x333333), 0.55, 1.4, 0.2, 8), bx(0.5, 0.35, 0.05, lam(0x1a1a1a), -0.4, 0.62, 0.46));
+        lampM = bx(0.12, 0.12, 0.05, lampMat, -0.4, 0.86, 0.47);
+        rec.parts.vib = true;
+      } else if (st === 'breaker') {
+        grp.add(bx(0.8, 1.2, 0.3, lam(0x4a5058), 0, 1.3, 0), bx(0.1, 0.5, 0.1, lam(0xb0b4b8), 0, 1.3, 0.2));
+        const arm = new THREE.Group(); arm.position.set(0, 1.3, 0.25);
+        arm.add(bx(0.08, 0.6, 0.08, lam(0xc02020, 0x300000), 0, 0.3, 0)); arm.rotation.x = 0.8;
+        grp.add(arm); rec.parts.arm = arm;
+        grp.add(bx(0.12, 1.3, 0.12, lam(0x30343a), 0, 0.65, 0));
+        lampM = bx(0.15, 0.1, 0.05, lampMat, 0, 1.85, 0.16);
+      } else if (st === 'desk') {
+        grp.add(bx(2.2, 1.05, 0.7, lam(0x6b5a44), 0, 0.52, 0), bx(2.3, 0.06, 0.8, lam(0x2b2b2b), 0, 1.08, 0));
+        lampM = cy(0.1, 0.12, 0.08, lampMat, 0.6, 1.16, 0.1, 12);
+        grp.add(cy(0.03, 0.03, 0.12, lam(0xc8c8c8), 0.6, 1.24, 0.1, 6));
+      } else {
+        grp.add(cy(0.18, 0.25, 1.0, lam(0x2a2f35), 0, 0.5, 0, 10));
+        lampM = cy(0.12, 0.12, 0.08, lampMat, 0, 1.04, 0, 14);
+      }
+      grp.add(lampM);
+      rec.glow = glowSprite(0xff3020, 1.6, 0.35); rec.glow.position.y = st === 'plate' ? 0.5 : 1.5; grp.add(rec.glow);
+      rec.parts.lampM = lampM;
+      grp.position.set(o.x, 0, o.z);
+      break;
+    }
+    case 'steamvalve': {
+      grp.add(cy(0.18, 0.18, 2.6, lam(0x6a4a3a), 0, 1.3, 0, 10), bx(0.5, 0.5, 0.5, lam(0x4a3a30), 0, 1.0, 0));
+      const wheel = new THREE.Mesh(new THREE.TorusGeometry(0.42, 0.05, 8, 20), lam(0xc02a20, 0x300806));
+      wheel.position.set(0, 1.25, 0.3);
+      for (let k = 0; k < 3; k++) { const sp = bx(0.84, 0.04, 0.04, lam(0xc02a20), 0, 0, 0); sp.rotation.z = k * Math.PI / 3; wheel.add(sp); }
+      const gauge = cy(0.16, 0.16, 0.05, lam(0xeeeeee), 0.35, 1.7, 0.27, 16); gauge.rotation.x = Math.PI / 2;
+      const lampV = bx(0.14, 0.14, 0.05, new THREE.MeshBasicMaterial({ color: 0x661010 }), -0.35, 1.7, 0.27);
+      grp.add(wheel, gauge, lampV);
+      grp.position.set(o.x, 0, o.z);
+      rec.parts = { wheel, lampV };
+      break;
+    }
+    case 'radio': {
+      grp.add(bx(0.9, 0.75, 0.6, lam(0x5a4a38), 0, 0.37, 0), bx(0.5, 0.28, 0.18, lam(0x2a2a2a), 0, 0.88, 0),
+        cy(0.01, 0.01, 0.6, lam(0x999999), 0.18, 1.3, 0, 4), bx(0.3, 0.12, 0.02, basic(0xff9030), -0.05, 0.92, 0.1), glowSprite(0xffa040, 1.0, 0.3));
+      grp.children[4].position.set(0, 1.1, 0);
+      grp.position.set(o.x, 0, o.z);
+      break;
+    }
+    case 'monitor': {
+      const screenTex = textPlane((g, sz) => {
+        g.fillStyle = '#0a140a'; g.fillRect(0, 0, sz, sz);
+        for (let i = 0; i < 1400; i++) { g.fillStyle = `rgba(150,255,150,${Math.random() * 0.35})`; g.fillRect(Math.random() * sz, Math.random() * sz, 2, 2); }
+        g.fillStyle = 'rgba(120,255,140,.9)'; g.font = 'bold 26px "Courier New"'; g.fillText('CAM 0' + (1 + (o.id % 8)), 14, 34); g.fillText('REC ●', 150, 34);
+      }, 0.55, false).material;
+      screenTex.fog = false;
+      grp.add(bx(1.4, 0.8, 0.7, lam(0x3a342c), 0, 0.4, 0));
+      for (const [x, y] of [[-0.35, 1.08], [0.35, 1.08], [0, 1.6]]) {
+        grp.add(bx(0.62, 0.5, 0.5, lam(0x2c2c2c), x, y, -0.05));
+        const sc = new THREE.Mesh(new THREE.PlaneGeometry(0.5, 0.38), screenTex); sc.position.set(x, y, 0.21); grp.add(sc);
+      }
+      grp.add(glowSprite(0x80ff90, 2.2, 0.25)); grp.children[grp.children.length - 1].position.y = 1.3;
+      grp.position.set(o.x, 0, o.z);
+      break;
+    }
+    case 'lift': {
+      const [dx, dz] = BR.D4[o.d || 0];
+      grp.add(bx(TILE - 0.4, 0.04, TILE - 0.4, lam(0x6a6a6e), 0, 0.02, 0));
+      const panel = bx(0.3, 0.5, 0.08, lam(0x2c2c30), 0, 1.3, 0); panel.position.set(-dz * 1.6 + dx * 0, 1.3, dx * 1.6);
+      const btn = bx(0.12, 0.12, 0.1, basic(o.broken ? 0x331111 : 0xffb030), panel.position.x, 1.36, panel.position.z);
+      const sign = textPlane((g, sz) => { g.fillStyle = '#111'; g.fillRect(0, 60, sz, 136); g.fillStyle = o.broken ? '#552222' : '#ff6a20'; g.font = 'bold 90px "Courier New"'; g.textAlign = 'center'; g.fillText(String(o.f + 1), 128, 165); }, 0.6, false);
+      sign.position.set(-dx * 1.6, 2.5, -dz * 1.6); sign.rotation.y = Math.atan2(dx, dz); sign.material.fog = false;
+      grp.add(panel, btn, sign);
+      grp.position.set(o.x, 0, o.z);
+      break;
+    }
     case 'door': {
       G.doorObj = o;
       const alongX = o.dx !== 0;
@@ -324,6 +428,17 @@ export function refreshObj(rec) {
     p.top.material.color.setHex(o.on ? 0x30d0ff : 0x2a6080);
     rec.glow.material.opacity = o.on ? 0.6 : 0.2;
     p.top.position.y = o.on ? 0.05 : 0.09;
+  } else if (o.kind === 'switch') {
+    o._t = performance.now();
+    p.lampM.material.color.setHex(o.on ? 0x30ff60 : 0x661010);
+    rec.glow.material.color.setHex(o.on ? 0x40ff70 : 0xff3020);
+    rec.glow.material.opacity = o.on ? 0.6 : 0.3;
+    if (p.top) { p.top.material.color.setHex(o.on ? 0x30d060 : 0x884422); p.top.position.y = o.pressed ? 0.04 : 0.08; }
+    if (p.arm) p.arm.rotation.x = o.on ? -0.8 : 0.8;
+  } else if (o.kind === 'steamvalve') {
+    p.lampV.material.color.setHex(o.on ? 0x30ff60 : 0x661010);
+  } else if (o.kind === 'altar') {
+    p.flame.visible = !o.used; p.light.intensity = o.used ? 0 : 2.5;
   } else if (o.kind === 'door') {
     p.slab.visible = p.stripe.visible = !o.open;
     p.portal.visible = !!o.open;
@@ -334,8 +449,27 @@ export function refreshObj(rec) {
 }
 
 // Покачивание подбираемых предметов и мигание экрана терминала
+const _fwd = new THREE.Vector3(), _to = new THREE.Vector3();
 export function animateObjects(dt) {
+  camera.getWorldDirection(_fwd);
   for (const rec of objs.values()) {
+    const o = rec.o;
+    // цифры люминесцентной краской: видны только в луче фонаря
+    if (o.kind === 'digit' && o.uv && rec.uvMat) {
+      _to.set(o.x - camera.position.x, (o.y || 0) + 1.6 - camera.position.y, o.z - camera.position.z);
+      const d = _to.length(), c = d > 0 ? _fwd.dot(_to) / d : 0;
+      const lit = FL.on && FL.k > 0.5 && d < 9 && c > 0.9 ? Math.min(1, (c - 0.9) * 14) * Math.min(1, (9 - d) / 3) : 0;
+      rec.uvMat.opacity += (lit * 0.95 - rec.uvMat.opacity) * Math.min(1, dt * 8);
+    }
+    // отпущенный переключатель мигает всё чаще, пока не погаснет
+    if (o.kind === 'switch' && o.on && !o.pressed) {
+      const left = (o.left || 0) - (performance.now() - (o._t || 0)) / 1000;
+      const rate = left < 4 ? 8 : left < 8 ? 4 : 2;
+      rec.glow.material.opacity = Math.sin(S.time * rate * Math.PI) > 0 ? 0.65 : 0.15;
+    }
+    if (o.kind === 'switch' && o.on && rec.parts.vib) rec.group.position.x = o.x + Math.sin(S.time * 60) * 0.01;
+    if (o.kind === 'steamvalve' && o.on) rec.parts.wheel.rotation.z += dt * 0.6;
+    if (o.kind === 'altar' && !o.used) rec.parts.flame.scale.setScalar(2.2 + Math.sin(S.time * 9) * 0.15);
     if (rec.bob) { rec.group.position.y = rec.baseY + (rec.o.kind === 'fuse' ? 0.9 : 1.0) + Math.sin(S.time * 2 + rec.o.x) * 0.1; rec.group.rotation.y += dt * 1.2; }
     if (rec.o.kind === 'keypad' && !S.goalLines.some((l) => l.startsWith('Код') && l.includes('✔'))) rec.parts.screen.visible = Math.sin(S.time * 4) > -0.3;
   }

@@ -83,6 +83,13 @@ export const sfx = {
   boing: () => tone(180, 0.35, 0.3, 'sine', 620),
   revive: () => [392, 523, 659, 784, 1047].forEach((f, i) => tone(f, 0.6, 0.18, 'sine', null, i * 0.09)),
   bubble: () => { const f = rand(300, 700); tone(f, 0.08, 0.08, 'sine', f * 1.8); },
+  // звуки уровней (v — громкость по расстоянию до источника)
+  caralarm: (v = 1) => { for (let i = 0; i < 8; i++) tone(i % 2 ? 760 : 980, 0.22, 0.13 * v, 'square', null, i * 0.24); },
+  slam: (v = 1) => { tone(70, 0.4, 0.5 * v, 'sine', 35); noiseBurst(600, 0.3, 0.4 * v); },
+  radio: (v = 1) => { noiseBurst(3000, 0.6, 0.12 * v, 'bandpass'); tone(1000, 0.08, 0.06 * v, 'square', null, 0.5); },
+  lift: (v = 1) => { tone(880, 0.5, 0.15 * v, 'sine'); tone(660, 0.7, 0.12 * v, 'sine', null, 0.25); noiseBurst(200, 0.8, 0.15 * v); },
+  crash: (v = 1) => { noiseBurst(1800, 0.5, 0.45 * v, 'bandpass'); tone(160, 0.4, 0.3 * v, 'sawtooth', 60); },
+  steam: (v = 1) => noiseBurst(5000, 2.5, 0.25 * v, 'highpass'),
 };
 
 // Звуки близости существа (гул страха, сердцебиение) и случайные звуки окружения

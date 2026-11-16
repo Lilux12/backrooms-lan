@@ -29,11 +29,16 @@ export function placeMe(x, y, z) {
   me.o2 = 1; me.drowning = false; me.stunned = 0;
 }
 
-// Вытолкнуть из круглых препятствий (мебель на уровне «Беги!»)
-function pushOutObstacles(b) {
+// Вытолкнуть из круглых препятствий (мебель на уровне «Беги!»). На бегу врезался — споткнулся.
+let stumbleCd = 0;
+function pushOutObstacles(b, sprint, dt) {
+  stumbleCd = Math.max(0, stumbleCd - dt);
   for (const o of map.obst || []) {
     const dx = b.x - o.x, dz = b.z - o.z, d = Math.hypot(dx, dz), min = o.r + BR.PHYS.R;
-    if (d < min && d > 0.001 && Math.abs(b.y - map.spawn.y) < 1.5) { b.x = o.x + (dx / d) * min; b.z = o.z + (dz / d) * min; }
+    if (d < min && d > 0.001 && Math.abs(b.y - (o.y != null ? o.y : map.spawn.y)) < 1.5) {
+      b.x = o.x + (dx / d) * min; b.z = o.z + (dz / d) * min;
+      if (sprint && stumbleCd <= 0) { me.stunned = 0.55; me.shake = 0.25; stumbleCd = 1.2; sfx.thump(0.7); toast('Споткнулись!', 900); }
+    }
   }
 }
 
@@ -84,7 +89,7 @@ export function updateMovement(dt) {
     res = BR.moveBody(map, b, inp, dt);
     if (b.onGround && padUnder(b.x, b.y, b.z)) { b.vy = 14; b.onGround = false; sfx.boing(); } // батут
   }
-  pushOutObstacles(b);
+  pushOutObstacles(b, sprint, dt);
   me.x = b.x; me.y = b.y; me.z = b.z;
   if (res.landed > 1.2) sendNet({ t: 'fall', h: +res.landed.toFixed(2) }); // сервер решит, смертельно ли
   if (res.landed > HARD_FALL) {

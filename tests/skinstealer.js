@@ -122,7 +122,9 @@ async function main() {
     assert(Date.now() - t0 > 2000, 'двойник ответил на пинг слишком быстро');
     console.log(`  пинг: двойник ответил через ${((Date.now() - t0) / 1000).toFixed(1)} с (${reply.t === 'gesture' ? reply.kind : 'молчание'})`);
 
-    // 2) кодовое слово
+    // 2) кодовое слово (Борис подходит к Ане: спрашивать можно только того, кто рядом и на виду)
+    Object.assign(B.pos, spotNear(map, A.pos, 2));
+    await sleep(300);
     A.send({ t: 'ask', id: B.id });
     await B.wait((m) => m.t === 'ask');
     B.send({ t: 'answer', word: B.word });

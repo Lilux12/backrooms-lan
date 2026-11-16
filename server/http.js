@@ -16,6 +16,7 @@ const MIME = {
 function resolve(url) {
   let p;
   try { p = decodeURIComponent(url.split('?')[0]); } catch (e) { return null; }
+  if (p.includes('\0')) return null; // нулевой байт: fs бросает исключение синхронно и уронил бы сервер
   if (p.endsWith('/')) p += 'index.html';
   for (const [prefix, dir] of MOUNTS) {
     if (!p.startsWith(prefix)) continue;
@@ -31,11 +32,13 @@ function createHttpServer() {
     const file = resolve(req.url);
     const type = file && MIME[path.extname(file)];
     if (!type) { res.writeHead(404); res.end('Not found'); return; }
-    fs.readFile(file, (err, data) => {
-      if (err) { res.writeHead(404); res.end('Not found'); return; }
-      res.writeHead(200, { 'Content-Type': type, 'Cache-Control': 'no-cache' });
-      res.end(data);
-    });
+    try {
+      fs.readFile(file, (err, data) => {
+        if (err) { res.writeHead(404); res.end('Not found'); return; }
+        res.writeHead(200, { 'Content-Type': type, 'Cache-Control': 'no-cache' });
+        res.end(data);
+      });
+    } catch (e) { res.writeHead(400); res.end('Bad request'); } // любой странный путь — ответ, а не падение
   });
 }
 

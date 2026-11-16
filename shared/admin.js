@@ -6,7 +6,7 @@
 
   const ITEMS = [['detector', 'детектор'], ['noise', 'шумелка'], ['medkit', 'аптечка'], ['fuse', 'предохранитель'], ['map', 'улучшенная карта']];
   const SKINS = [['human', 'человек'], ['duck', 'утка'], ['cube', 'куб'], ['banana', 'банан']];
-  const MOBS = [['stalker', 'Сталкер'], ['runner', 'Улыбающийся'], ['drowner', 'Утопленник'], ['skinstealer', 'Skin Stealer']];
+  const MOBS = BR.MOB_TYPES.map((t) => [t, BR.MOB_NAMES[t]]);
   const FILTERS = [['none', 'нет'], ['8bit', '8-бит'], ['bw', 'ч/б'], ['night', 'ночное зрение'], ['vhs', 'VHS']];
   const RAIN = [['water', 'вода'], ['medkit', 'аптечки'], ['noisemaker', 'шумелки'], ['fuse', 'предохранители']];
 

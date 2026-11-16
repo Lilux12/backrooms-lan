@@ -38,7 +38,7 @@ async function main() {
   const chrome = findChrome();
   if (!chrome) { console.log('SKIP smoke-browser: Chromium не найден (переменная CHROME)'); return; }
   fs.mkdirSync(OUT, { recursive: true });
-  const levels = process.env.START_LEVEL ? [+process.env.START_LEVEL] : [0, 1, 2, 3, 4, 5];
+  const levels = process.env.START_LEVEL ? [+process.env.START_LEVEL] : require('../shared/map.js').LEVELS.map((_, i) => i);
   const prof = fs.mkdtempSync(path.join(os.tmpdir(), 'br-chrome-'));
   const br = spawn(chrome, ['--headless=new', '--remote-debugging-port=0', `--user-data-dir=${prof}`, '--no-first-run',
     '--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--window-size=1280,720', '--autoplay-policy=no-user-gesture-required', 'about:blank'],

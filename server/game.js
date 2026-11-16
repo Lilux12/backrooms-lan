@@ -8,7 +8,8 @@ const { clients, joinedList, joinedCount, broadcast, sendPlayers, playerList, cl
 const SS = require('./skinstealer');
 const ADM = require('./admin');
 const { updateMob, randomFloorFar, inWater } = require('./mobs');
-const { PUZZLES, removeObj, goalLines, sendGoals, enterCode, near, tickWater, patch, alarm, PICK_DIST } = require('./puzzles');
+const PZ = require('./puzzles');
+const { PUZZLES, removeObj, goalLines, sendGoals, enterCode, near, tickWater, patch, alarm, PICK_DIST, useCommon, tickCommon } = PZ;
 const { buildLevel, chasePackPos } = require('./level');
 
 const CATCH_DIST = 1.3;       // существо ловит на таком расстоянии (по горизонтали)
@@ -18,7 +19,7 @@ const USE_DIST = 3.6;         // дальность взаимодействия
 const EXIT_DIST = 2.6;        // радиус «у двери»
 const EXIT_WAIT = 8;          // сколько ждём остальных, когда кто-то у двери
 const CHASE_WAKE_DIST = 9;    // «Беги!»: стая просыпается, когда игрок отошёл от старта
-const MOB_TYPES = ['stalker', 'runner', 'drowner', 'skinstealer']; // индекс типа уходит клиенту в снапшоте
+const { MOB_TYPES } = BR; // индекс типа уходит клиенту в снапшоте (список общий с клиентом: shared/core.js)
 const FATAL_FALL = 10;        // падение с такой высоты смертельно
 const CHECK_DIST = 14;        // проверять игрока (пинг, слово, детектор) можно с такого расстояния
 const CHAT_GAP = 0.7;         // не чаще одного сообщения в чат за столько секунд
@@ -73,6 +74,7 @@ function initMsg(c) {
     t: 'init', id: c.id, level: G.idx, levels: LEVELS.length, seed: G.seed,
     objs: G.objs, goals: goalLines(G), held: G.pz.fuses.held, upgrades: { map: state.TEAM.map },
     spawn: { x: c.x, y: c.y, z: c.z }, wl: G.map.wl, dead: deadIds(), world: ADM.worldMsg(), admin: !!c.admin,
+    obst: G.extraObst || [], cells: G.cellLog || [],
     players: playerList(),
   };
 }
@@ -117,10 +119,16 @@ function teleport(G, p, pos, reason) {
   p.send({ t: 'caught', x: pos.x, y: pos.y, z: pos.z, reason });
 }
 
+PZ.hooks.teleport = (G, p, pos, reason) => teleport(G, p, pos, reason);
+
 // Существо поймало игрока: телепорт (или рестарт забега на уровне-погоне)
 function catchPlayer(G, p, m0) {
   if (G.cfg.chase || p.god) teleport(G, p, G.cfg.chase ? G.map.spawn : randomFloorFar(G, m0), 'caught');
-  else killPlayer(G, p, m0.type === 'drowner' ? 'Утопленник утащил вас под воду' : 'Вас поймало существо');
+  else {
+    const nm = BR.MOB_NAMES[m0.type] || 'существо';
+    if (m0.type === 'drowner') killPlayer(G, p, 'Утопленник утащил вас под воду', 'его утащил под воду Утопленник');
+    else killPlayer(G, p, `Вас поймал${m0.type === 'teacher' ? 'а' : ''} ${nm}`, `его поймал${m0.type === 'teacher' ? 'а' : ''} ${nm}`);
+  }
   if (G.cfg.chase) { // забег начинается заново: стая возвращается к старту
     G.mobs.forEach((m, i) => { chasePackPos(G, m, i); m.stun = 3.5 + i * 0.6; m.mode = 'chase'; });
   } else if (m0.type === 'drowner') {
@@ -135,16 +143,23 @@ function catchPlayer(G, p, m0) {
 /* ----------------------- Смерть, зрители, воскрешение ----------------------- */
 function deadIds() { return joinedList().filter((p) => p.dead).map((p) => p.id); }
 
-function killPlayer(G, p, reason) {
-  if (p.dead) return;
+// reason — текст для погибшего («Вас поймало существо»), pub — для остальных («его поймало существо»)
+function killPlayer(G, p, reason, pub) {
+  if (p.dead || G.state !== 'play') return;
   p.dead = true; p.deadAt = Date.now();
   G.stats.deaths++;
   p.deaths = (p.deaths || 0) + 1;
   p.send({ t: 'dead', reason });
-  broadcast({ t: 'ev', text: `${p.name} погиб. ${reason.replace(/^Вас /, '')}`.replace('погиб. поймало существо', 'погиб: его поймало существо') });
+  broadcast({ t: 'ev', text: `${p.name} погиб: ${pub || 'неизвестная причина'}` });
   broadcast({ t: 'deadlist', ids: deadIds() });
-  log(`${p.name} погиб (${reason})`);
-  if (joinedList().every((q) => q.dead)) defeat(G);
+  log(`${p.name} погиб (${pub || reason})`);
+  checkDefeat(G);
+}
+
+// Все, кто в игре, мертвы (в том числе после выхода последнего живого) — поражение
+function checkDefeat(G) {
+  const list = joinedList();
+  if (G.state === 'play' && list.length && list.every((q) => q.dead)) defeat(G);
 }
 
 function revive(G, p, pos, by) {
@@ -240,11 +255,11 @@ function addObjNet(G, kind, props) {
 const API = {
   teleport: (G, p, pos, reason) => teleport(G, p, pos, reason),
   revive: (G, p, pos, by) => revive(G, p, pos, by),
-  kill: (G, p, reason) => killPlayer(G, p, reason),
+  kill: (G, p, reason, pub) => killPlayer(G, p, reason, pub),
   startLevel: (idx, seed) => startLevel(idx, seed),
   alarm: (G, x, y, z) => alarm(G, x, y, z),
   addObj: addObjNet,
-  catchBy: (G, victim, by) => { if (victim.god) return; killPlayer(G, victim, `Вас поймал(а) ${by.name}`); },
+  catchBy: (G, victim, by) => { if (victim.god) return; killPlayer(G, victim, `Вас поймал(а) ${by.name}`, `его поймал(а) ${by.name}`); },
 };
 
 let lastTick = process.hrtime.bigint();
@@ -271,19 +286,19 @@ function tick() {
   // кого существа видят: не невидимых и не «одержимых»; при дружелюбных существах — никого
   const hunted = W.friendly ? [] : active.filter((p) => !(p.mods && (p.mods.invis || p.mods.possessed)));
   if (!W.aioff) {
-    for (const m of G.mobs) updateMob(G, m, dt, hunted);
+    G.mobs.forEach((m, k) => updateMob(G, m, dt, hunted, k));
     if (G.ss) SS.tickStealer(G, dt, players.filter((p) => p.caged || hunted.includes(p)));
   }
   SS.tickPings(G, dt, players);
   if (G.ss) { SS.detectorBeeps(G, players, dt); cageViews(G, dt, players); }
   ADM.tickAdmin(G, dt, active, API);
 
-  let goalsChanged = false;
+  let goalsChanged = tickCommon(G, active, dt);
   for (const p of active) {
     if (p.invuln > 0) p.invuln -= dt;
     if (touchObjects(G, p)) goalsChanged = true;
     if (!hunted.includes(p) || W.aioff) continue;
-    const m0 = G.mobs.find((m) => m.stun <= 0 && !m.hidden && p.invuln <= 0 && Math.hypot(m.x - p.x, m.z - p.z) < CATCH_DIST * (m.boss ? 1.6 : 1) &&
+    const m0 = G.mobs.find((m) => m.stun <= 0 && !m.hidden && !m.frozen && p.invuln <= 0 && Math.hypot(m.x - p.x, m.z - p.z) < CATCH_DIST * (m.boss ? 1.6 : 1) &&
       (m.type === 'drowner' ? inWater(G, p) && Math.abs(m.y - p.y) < 3 : Math.abs(m.y - p.y) < CATCH_DY));
     if (m0) catchPlayer(G, p, m0);
   }
@@ -346,6 +361,7 @@ function onLeave(c) {
   if (G && c.caged) { const cage = G.objs.find((o) => o.id === c.caged); if (cage) cage.prisoner = 0; }
   if (c.joined) { broadcast({ t: 'ev', text: `${c.name} вышел из игры` }); sendPlayers(); }
   log(`отключился: ${c.name} (онлайн: ${joinedCount()})`);
+  if (G && c.joined) { broadcast({ t: 'deadlist', ids: deadIds() }); checkDefeat(G); } // ушёл последний живой — не оставляем призраков одних
 }
 
 function onMessage(c, msg) {
@@ -354,10 +370,12 @@ function onMessage(c, msg) {
   const G = state.G;
   if (!c.joined || G.state !== 'play') return;
 
-  if (msg.t === 'chat' && typeof msg.text === 'string' && msg.text.trim().startsWith('/')) { ADM.onAdmin(state.G, c, { line: msg.text }, API); return; } // команды хоста
   if (msg.t === 'chat') {
     const now = Date.now() / 1000;
-    if (now - (c.chatT || 0) < CHAT_GAP) return;
+    const cmd = typeof msg.text === 'string' && msg.text.trim().startsWith('/');
+    // у хоста свой лимит частоты команд; остальным — общий лимит чата (иначе можно засыпать консоль сервера)
+    if (!(cmd && c.admin) && now - (c.chatT || 0) < CHAT_GAP) return;
+    if (cmd) { if (!c.admin) c.chatT = now; ADM.onAdmin(state.G, c, { line: msg.text }, API); return; } // команды хоста
     c.chatT = now;
     const text = String(msg.text || '').replace(/[<>&]/g, '').trim().slice(0, 120);
     if (text) broadcast({ t: 'chat', id: c.id, name: c.name, text });
@@ -384,6 +402,10 @@ function onMessage(c, msg) {
     const x = +msg.x, y = +msg.y, z = +msg.z, r = +msg.r;
     if ([x, y, z, r].every(Number.isFinite)) {
       const node = BR.nodeAt(G.map, x, y + 0.1, z);
+      // скорость по горизонтали (сглаженная): существа слышат бег
+      const now = Date.now(), pdt = (now - (c.posT || now)) / 1000;
+      if (pdt > 0.02) { const v = Math.min(12, Math.hypot(x - c.x, z - c.z) / pdt); c.spd = (c.spd || 0) * 0.5 + v * 0.5; }
+      c.posT = now;
       c.x = Math.min(N * TILE, Math.max(0, x));
       c.y = Math.min(G.map.F * G.map.FH + 2, Math.max(-6, y));
       c.z = Math.min(N * TILE, Math.max(0, z));
@@ -409,6 +431,7 @@ function onMessage(c, msg) {
     }
     if (o.kind === 'lore') G.stats.notes.add(o.id);
     for (const name of G.cfg.puzzles) if (PUZZLES[name].use && PUZZLES[name].use(G, c, o)) return;
+    if (useCommon(G, c, o)) return; // лифты, рации, мониторы, переключатели
   } else if (msg.t === 'code') {
     if (G.cfg.puzzles.includes('code')) enterCode(G, c, msg.v);
   } else if (msg.t === 'ping' || msg.t === 'ask' || msg.t === 'scan') {
@@ -431,7 +454,7 @@ function onMessage(c, msg) {
       if (v) { const m = G.ss.m; Object.assign(m.body, { x: v.x + 0.5, y: v.y, z: v.z, vy: 0 }); Object.assign(m, { x: v.x + 0.5, y: v.y, z: v.z }); }
     }
     if (msg.cmd === 'freeze-mobs') for (const m of G.mobs) m.stun = 1e9;
-    if (msg.cmd === 'kill') { const v = clientById(+msg.id); if (v) killPlayer(G, v, 'Тест'); }
+    if (msg.cmd === 'kill') { const v = clientById(+msg.id); if (v) killPlayer(G, v, 'Тест', 'тест'); }
     if (msg.cmd === 'give' && c.items[msg.item] !== undefined) { c.items[msg.item] = 1; c.send({ t: 'items', items: c.items }); }
     if (msg.cmd === 'ss-unmask' && G.ss && G.ss.state === 'IMPERSONATE') G.ss.t = 999;
   } else if (msg.t === 'hash') {
@@ -442,10 +465,10 @@ function onMessage(c, msg) {
     }
   } else if (msg.t === 'drown') {
     if (G.cfg.chase || c.god) teleport(G, c, randomFloorFar(G, c), 'drown');
-    else killPlayer(G, c, 'Вы захлебнулись');
+    else killPlayer(G, c, 'Вы захлебнулись', 'захлебнулся');
   } else if (msg.t === 'fall') {
     const h = +msg.h;
-    if (Number.isFinite(h) && h > FATAL_FALL && !G.cfg.chase && !c.god) killPlayer(G, c, 'Падение с большой высоты');
+    if (Number.isFinite(h) && h > FATAL_FALL && !G.cfg.chase && !c.god) killPlayer(G, c, 'Падение с большой высоты', 'разбился при падении');
   } else if (msg.t === 'stuck') {
     teleport(G, c, G.map.spawn, 'stuck');
   } else if (msg.t === 'revive') {

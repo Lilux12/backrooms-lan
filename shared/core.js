@@ -20,13 +20,25 @@
     VENT: 5,    // вентиляционный лаз: потолок на высоте VENT_H, пройти можно только ползком
     LADDER: 6,  // вертикальная лестница у стены: aux = направление на стену; над ней на этаже выше — HOLE
     LOW: 7,     // низкий потолок (душный коридор): потолок на высоте LOW_H
+    BLOCK: 8,   // низкое препятствие высотой BLOCK_H (машина, стол, кровать, стеллаж): поверх него видно, пройти нельзя;
+                // aux — вариант модели (рисует клиент по стилю уровня)
   };
   const VENT_H = 1.15;
   const LOW_H = 2.35;
+  const BLOCK_H = 1.3;
 
   // Клетки, по которым можно ходить (у них есть пол)
-  const WALKABLE = new Uint8Array(8);
+  const WALKABLE = new Uint8Array(9);
   [T.FLOOR, T.STAIR, T.POOL, T.VENT, T.LADDER, T.LOW].forEach((t) => { WALKABLE[t] = 1; });
+
+  // Типы существ. Индекс в этом списке уходит клиенту в снапшоте — новые типы добавляются только в конец.
+  const MOB_TYPES = ['stalker', 'runner', 'drowner', 'skinstealer', 'worm', 'crawler', 'headlights', 'bellhop',
+    'mannequin', 'specimen', 'teacher', 'doll', 'overseer'];
+  const MOB_NAMES = {
+    stalker: 'Сталкер', runner: 'Улыбающийся', drowner: 'Утопленник', skinstealer: 'Skin Stealer', worm: 'Червь',
+    crawler: 'Ползун', headlights: 'Фары', bellhop: 'Коридорный', mannequin: 'Манекен', specimen: 'Образец',
+    teacher: 'Воспитательница', doll: 'Кукла', overseer: 'Надсмотрщик',
+  };
 
   function mulberry32(a) {
     return function () {
@@ -66,7 +78,7 @@
   }
 
   Object.assign(BR, {
-    TILE, N, NN, SLAB, D4, T, WALKABLE, VENT_H, LOW_H,
+    TILE, N, NN, SLAB, D4, T, WALKABLE, VENT_H, LOW_H, BLOCK_H, MOB_TYPES, MOB_NAMES,
     mulberry32, shuffle, cellX, cellZ, inside, inner, centerX, centerZ, cellAt, hashArrays,
   });
   if (typeof module === 'object' && module.exports) module.exports = BR;

@@ -140,7 +140,7 @@ const HANDLERS = {
     }
   },
   revive: (G, c, a, api) => { for (const p of targets(c, a.id)) if (p.dead) api.revive(G, p, ahead(G, c), 'Хост'); },
-  kill: (G, c, a, api) => { for (const p of targets(c, a.id)) api.kill(G, p, 'Хост решил иначе'); },
+  kill: (G, c, a, api) => { for (const p of targets(c, a.id)) api.kill(G, p, 'Хост решил иначе', 'так решил хост'); },
   god: (G, c, a) => { for (const p of targets(c, a.id)) p.god = a.on; setMod(c, a.id, 'god', a.on); },
   invis: (G, c, a) => setMod(c, a.id, 'invis', a.on),
   speed: (G, c, a) => setMod(c, a.id, 'speed', a.v),
@@ -283,7 +283,7 @@ function tickAdmin(G, dt, active, api) {
       const t = p.node >= 0 ? G.map.t[Math.floor(p.node / BR.NN)][p.node % BR.NN] : -1;
       const onFloor = (t === BR.T.FLOOR || t === BR.T.LOW) && Math.abs(p.y - Math.floor(p.node / BR.NN) * G.map.FH) < 0.15;
       p.lavaT = onFloor ? (p.lavaT || 0) + dt : 0;
-      if (p.lavaT > 2) { p.lavaT = 0; api.kill(G, p, 'Пол — это лава!'); }
+      if (p.lavaT > 2) { p.lavaT = 0; api.kill(G, p, 'Пол — это лава!', 'наступил на лаву'); }
     }
     // «одержимый» игрок ловит других, как существо
     if (p.mods && p.mods.possessed) {
