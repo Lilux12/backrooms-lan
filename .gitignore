@@ -1,0 +1,15 @@
+# Зависимости
+node_modules/
+
+# Логи и временные файлы
+*.log
+npm-debug.log*
+
+# Окружение и секреты
+.env
+.env.*
+
+# Системный мусор
+.DS_Store
+Thumbs.db
+desktop.ini

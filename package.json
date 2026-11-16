@@ -1,0 +1,12 @@
+{
+  "name": "backrooms-lan",
+  "version": "1.0.0",
+  "description": "Backrooms Level 0 — 3D-игра с мультиплеером по локальной сети",
+  "main": "server.js",
+  "scripts": { "start": "node server.js" },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Lilux12/backrooms-lan.git"
+  },
+  "license": "MIT"
+}
