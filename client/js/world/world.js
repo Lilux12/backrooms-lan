@@ -2,13 +2,15 @@
 import * as THREE from 'three';
 import { BR, LEVELS } from '../core/util.js';
 import { scene } from '../render/scene.js';
-import { applyStyle, mats, panelMat } from '../render/lighting.js';
+import { applyStyle, curStyle, mats, panelMat } from '../render/lighting.js';
 import { createObj } from './objects.js';
 import { addDecor, addObstacle } from './props.js';
 import { buildLevelGeometry } from './geometry.js';
+import { buildFx } from './fx.js';
 
 /* ============================== Мир ============================== */
-export let map = null, world = null, H = 3.2, curLevel = 0, water = null;
+export let map = null, world = null, H = 3.2, curLevel = 0, water = null, fx = null;
+let geoGroup = null, curSeed = 0;
 export const objs = new Map(); // id -> {o, group, parts, baseY}
 let extraMats = [];
 
@@ -18,6 +20,7 @@ function disposeWorld() {
   world.traverse((o) => { if (o.geometry) o.geometry.dispose(); });
   for (const m of extraMats) { if (m.map) m.map.dispose(); m.dispose(); }
   extraMats = [];
+  geoGroup = null; fx = null;
   world = null;
   objs.clear();
 }
@@ -34,10 +37,10 @@ export function buildWorld(level, seed, objList, wl) {
   H = map.FH;
   G.doorObj = null;
   world = new THREE.Group();
-  const geo = buildLevelGeometry(map, mats, st, seed, panelMat);
-  world.add(geo.group);
-  water = geo.water;
-  extraMats = geo.tileMats;
+  curSeed = seed;
+  buildGeo();
+  fx = buildFx(map);
+  world.add(fx.group);
 
   // Объекты (дверь первой, чтобы терминал знал её направление)
   const sorted = objList.slice().sort((a, b) => (a.kind === 'door' ? -1 : 0) - (b.kind === 'door' ? -1 : 0));
@@ -67,4 +70,26 @@ export function setWater(levels) {
   levels.forEach((v, i) => { map.wl[i] = v; });
   map.navDirty = true;
   if (water) water.update();
+}
+
+// Геометрия уровня (пересобирается целиком, когда сервер меняет клетки: шлюзы, люки, обрушения)
+function buildGeo() {
+  if (geoGroup) {
+    world.remove(geoGroup);
+    geoGroup.traverse((o) => { if (o.geometry) o.geometry.dispose(); });
+    for (const m of extraMats) { if (m.map) m.map.dispose(); m.dispose(); }
+  }
+  const geo = buildLevelGeometry(map, mats, LEVEL_STYLE(), curSeed, panelMat);
+  geoGroup = geo.group;
+  world.add(geoGroup);
+  water = geo.water;
+  extraMats = geo.tileMats;
+}
+const LEVEL_STYLE = () => curStyle;
+
+// Сервер изменил клетку карты
+export function setCellLocal(f, i, type, aux) {
+  if (!map) return;
+  BR.setCell(map, f, i, type, aux);
+  buildGeo();
 }

@@ -4,7 +4,7 @@
 (function (root) {
   'use strict';
   const isNode = typeof module === 'object' && module.exports;
-  const BR = isNode ? (require('./core.js'), require('./world.js'), require('./gen2d.js'), require('./build.js')) : root.BR;
+  const BR = isNode ? (require('./core.js'), require('./world.js'), require('./gen2d.js'), require('./build.js'), require('./levels/pools.js')) : root.BR;
   const { TILE, N, NN, T, D4, mulberry32, shuffle, cellX, cellZ, inner } = BR;
 
   /* ------------------------------ Кампания ------------------------------
@@ -63,20 +63,16 @@
       intro: 'Дверь внизу откроется, только когда нажаты ОБЕ плиты. Каждая держится около 20 секунд. Тоннели связаны колодцами с лестницами, а через лазы (C — ползти) можно срезать путь.',
     },
     {
-      name: 'Бассейны', style: 'pool', F: 2, FH: 4.2, spawnF: 1, exitF: 0,
-      floors: [
-        { gen: 'rooms', p: { extra: 16, doorW: 2, pillar: 0, cubicle: 0 } },
-        { gen: 'rooms', p: { extra: 12, doorW: 2, pillar: 0.5, cubicle: 0 } },
+      name: 'Бассейны', style: 'pool', custom: 'pools', F: 4, FH: 4.0, spawnF: 1, exitF: 3,
+      mobList: [{ type: 'stalker', count: 1 }, { type: 'drowner', count: 1 }], mobSpeed: 1.1, water: 4,
+      puzzles: ['pools'],
+      intro: 'Заброшенный аквапарк. Слейте воду из атриума вентилями в насосной (этажом ниже), откройте шлюз на дне бассейна, найдите ключ-карту и запустите насос — вода поднимет вас к выходу под стеклянной крышей. В воде что-то живёт.',
+      lore: [
+        { title: 'Записка тренера', text: 'Дорожки больше не держат воду. Вчера на 3-й кто-то плыл до самого утра — я слышал удары о бортик. Утром бассейн был пуст. И мокрые следы вели ВНИЗ, в насосную.' },
+        { title: 'Расписание «последних заплывов»', text: '07:00 — разминка\n08:00 — группа «Дельфин»\n09:00 — группа «Дельфин» (повторно)\n09:00 — группа «Дельфин»\n??:?? — НЕ ВХОДИТЬ В ВОДУ ПОСЛЕ ГУДКА' },
+        { title: 'Плёнка камеры №4', text: 'Кассета подписана «бассейн, ночь». На записи — пустая чаша, свет мигает. На 03:14 на дне появляется фигура, лежащая лицом вверх. Она не двигается. Вода прибывает. Фигура — уже у самой поверхности, и смотрит в камеру.' },
+        { title: 'Памятка насосной', text: 'Слив атриума выполнять ТОЛЬКО при верном давлении на всех трёх вентилях. Неверное давление — аварийный выброс в насосную. Ключ-карта насоса хранится в сухом отсеке за шлюзом.' },
       ],
-      build(map, rnd, used) {
-        BR.addPools(map, rnd, 0, 6, { min: 2, max: 3, depth: 2.5 });
-        BR.addStairs(map, rnd, 0, 3, used);
-        BR.addAtrium(map, rnd, 0, 5);
-        BR.addHoles(map, rnd, 1, 3, 2);
-      },
-      mobs: 1, mobType: 'stalker', mobSpeed: 1.15, water: 3,
-      puzzles: ['levers'],
-      intro: 'Найдите записку с подсказкой и потяните 4 рычага в правильном порядке. Ошибка включит сирену! В бассейнах можно плавать (Пробел — вверх, C — нырнуть), следите за воздухом.',
     },
     {
       name: 'Беги!', tag: 'LEVEL !', style: 'run', F: 1, FH: 3.4, spawnF: 0, exitF: 0,
@@ -108,13 +104,20 @@
     const L = LEVELS[levelIdx];
     const rnd = mulberry32(((seed >>> 0) + levelIdx * 977) >>> 0);
     const map = BR.newMap(L.F, L.FH);
-    L.floors.forEach((spec, f) => BR.layerFromGrid(map, f, BR.gen2d(rnd, spec)));
     const spawnCell = 1 + N;
     const spawnNode = L.spawnF * NN + spawnCell;
     const used = [spawnCell, spawnCell + 1, spawnCell + N]; // у старта ничего не строим
-    if (L.build) L.build(map, rnd, used);
-    for (let f = 0; f < map.F; f++) if (map.t[f][spawnCell] !== T.FLOOR) map.t[f][spawnCell] = f === L.spawnF ? T.FLOOR : map.t[f][spawnCell];
+    if (L.custom) {
+      // собственный генератор уровня (shared/levels/*.js): строит всё сам
+      BR.LEVEL_GENS[L.custom].build(map, rnd, used);
+    } else {
+      L.floors.forEach((spec, f) => BR.layerFromGrid(map, f, BR.gen2d(rnd, spec)));
+      if (L.build) L.build(map, rnd, used);
+    }
+    if (map.t[L.spawnF][spawnCell] !== T.FLOOR) map.t[L.spawnF][spawnCell] = T.FLOOR;
+    // ремонт идёт в «открытом» состоянии (все двери и люки открыты), потом закрываем то, что закрыто в начале
     BR.finalize(map, spawnNode);
+    if (L.custom && BR.LEVEL_GENS[L.custom].after) { BR.LEVEL_GENS[L.custom].after(map); BR.buildColumns(map); map.navDirty = true; BR.ensureNav(map); }
 
     map.seed = seed; map.level = levelIdx;
     map.spawnNode = spawnNode;
@@ -130,7 +133,7 @@
       if (t === T.FLOOR || t === T.LOW) map.spots.push(n);
     }
     map.exit = pickExit(map, rnd, L.exitF);
-    map.obst = L.floors[0].gen === 'run' ? BR.genObstacles(rnd) : [];
+    map.obst = L.floors && L.floors[0].gen === 'run' ? BR.genObstacles(rnd) : [];
     map.hash = BR.mapHash(map);
     return map;
   }

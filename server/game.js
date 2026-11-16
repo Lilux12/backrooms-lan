@@ -5,8 +5,8 @@ const { TILE, N, LEVELS } = BR;
 const config = require('./config');
 const state = require('./state');
 const { joinedList, joinedCount, broadcast, sendPlayers, log } = require('./clients');
-const { updateMob, randomFloorFar } = require('./mobs');
-const { PUZZLES, removeObj, goalLines, sendGoals, enterCode, near, PICK_DIST } = require('./puzzles');
+const { updateMob, randomFloorFar, inWater } = require('./mobs');
+const { PUZZLES, removeObj, goalLines, sendGoals, enterCode, near, tickWater, PICK_DIST } = require('./puzzles');
 const { buildLevel, chasePackPos } = require('./level');
 
 const CATCH_DIST = 1.3;       // существо ловит на таком расстоянии (по горизонтали)
@@ -16,6 +16,7 @@ const USE_DIST = 3.6;         // дальность взаимодействия
 const EXIT_DIST = 2.6;        // радиус «у двери»
 const EXIT_WAIT = 8;          // сколько ждём остальных, когда кто-то у двери
 const CHASE_WAKE_DIST = 9;    // «Беги!»: стая просыпается, когда игрок отошёл от старта
+const MOB_TYPES = ['stalker', 'runner', 'drowner']; // индекс типа уходит клиенту в снапшоте
 
 function setPos(c, p) {
   c.x = p.x; c.y = p.y; c.z = p.z;
@@ -91,10 +92,12 @@ function teleport(G, p, pos, reason) {
 
 // Существо поймало игрока: телепорт (или рестарт забега на уровне-погоне)
 function catchPlayer(G, p, m0) {
-  teleport(G, p, G.cfg.chase ? G.map.spawn : randomFloorFar(G, m0), 'caught');
+  teleport(G, p, G.cfg.chase ? G.map.spawn : randomFloorFar(G, m0), m0.type === 'drowner' ? 'drowned' : 'caught');
   broadcast({ t: 'ev', text: `Существо поймало игрока ${p.name}!` });
   if (G.cfg.chase) { // забег начинается заново: стая возвращается к старту
     G.mobs.forEach((m, i) => { chasePackPos(G, m, i); m.stun = 3.5 + i * 0.6; m.mode = 'chase'; });
+  } else if (m0.type === 'drowner') {
+    m0.stun = 6; // утопленник уходит на дно
   } else {
     const away = randomFloorFar(G, p);
     Object.assign(m0.body, { x: away.x, y: away.y, z: away.z, vy: 0 });
@@ -117,13 +120,15 @@ function tick() {
     return;
   }
 
+  tickWater(G, dt);
   for (const m of G.mobs) updateMob(G, m, dt, players);
 
   let goalsChanged = false;
   for (const p of players) {
     if (p.invuln > 0) p.invuln -= dt;
     if (touchObjects(G, p)) goalsChanged = true;
-    const m0 = G.mobs.find((m) => m.stun <= 0 && p.invuln <= 0 && Math.hypot(m.x - p.x, m.z - p.z) < CATCH_DIST && Math.abs(m.y - p.y) < CATCH_DY);
+    const m0 = G.mobs.find((m) => m.stun <= 0 && !m.hidden && p.invuln <= 0 && Math.hypot(m.x - p.x, m.z - p.z) < CATCH_DIST &&
+      (m.type === 'drowner' ? inWater(G, p) && Math.abs(m.y - p.y) < 3 : Math.abs(m.y - p.y) < CATCH_DY));
     if (m0) catchPlayer(G, p, m0);
   }
 
@@ -156,7 +161,7 @@ function tick() {
   broadcast({
     t: 's',
     p: players.map((c) => [c.id, f(c.x), f(c.y), f(c.z), f(c.r), c.fl ? 1 : 0, c.crouch ? 1 : 0]),
-    m: G.mobs.map((m) => [f(m.x), f(m.y), f(m.z), f(m.r), m.mode === 'chase' ? 1 : 0, m.stun > 0 ? 1 : 0]),
+    m: G.mobs.map((m) => [f(m.x), f(m.y), f(m.z), f(m.r), m.mode === 'chase' ? 1 : 0, m.stun > 0 || m.hidden ? 1 : 0, MOB_TYPES.indexOf(m.type)]),
   });
 }
 
@@ -196,6 +201,7 @@ function onMessage(c, msg) {
   } else if (msg.t === 'use') {
     const o = G.objs.find((q) => q.id === msg.id);
     if (!o || !near(o, c, USE_DIST)) return;
+    if (o.text) { c.send({ t: 'note', title: o.title, text: o.text }); return; } // записки, кассеты, таблицы
     for (const name of G.cfg.puzzles) if (PUZZLES[name].use && PUZZLES[name].use(G, c, o)) return;
   } else if (msg.t === 'code') {
     if (G.cfg.puzzles.includes('code')) enterCode(G, c, msg.v);

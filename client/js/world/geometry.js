@@ -91,6 +91,20 @@ function getWaterMat() {
   }
   return new THREE.MeshPhongMaterial({ map: waterTex, color: 0x9fe6ee, transparent: true, opacity: 0.62, shininess: 120, specular: 0x88bbcc, depthWrite: false, side: THREE.DoubleSide });
 }
+let glassMat = null;
+function getGlassMat() {
+  if (glassMat) return glassMat;
+  const c = document.createElement('canvas'); c.width = c.height = 128;
+  const g = c.getContext('2d');
+  const gr = g.createLinearGradient(0, 0, 128, 128);
+  gr.addColorStop(0, '#8fa8b0'); gr.addColorStop(1, '#6d8890');
+  g.fillStyle = gr; g.fillRect(0, 0, 128, 128);
+  for (let i = 0; i < 30; i++) { g.fillStyle = `rgba(255,255,255,${Math.random() * 0.12})`; g.beginPath(); g.arc(Math.random() * 128, Math.random() * 128, 6 + Math.random() * 20, 0, 7); g.fill(); }
+  g.strokeStyle = '#2a3236'; g.lineWidth = 6; g.strokeRect(0, 0, 128, 128); g.beginPath(); g.moveTo(64, 0); g.lineTo(64, 128); g.stroke();
+  const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace;
+  return (glassMat = new THREE.MeshBasicMaterial({ map: t, fog: false }));
+}
+
 export function animateWater(dt) { if (waterTex) { waterTex.offset.x += dt * 0.02; waterTex.offset.y += dt * 0.013; } }
 
 /*
@@ -109,7 +123,7 @@ export function buildLevelGeometry(map, mats, st, seed, panelMat) {
   const isExit = (f, i) => f === ex.f && i === ex.cell;
 
   const walls = [], floors = [], ceils = [], edges = [], stairs = [], ladders = [], fills = [], panels = [];
-  const poolFloors = [], poolSides = [];
+  const poolFloors = [], poolSides = [], glass = [];
   const flatTypes = new Set([T.FLOOR, T.LOW, T.LADDER, T.VENT]);
 
   for (let f = 0; f < F; f++) {
@@ -157,6 +171,7 @@ export function buildLevelGeometry(map, mats, st, seed, panelMat) {
       const up = f + 1 < F ? map.t[f + 1][i] : -1;
       if (t !== T.VENT && t !== T.LOW && up !== T.HOLE) {
         const cy = f + 1 < F ? b + FH - SLAB : b + FH;
+        if (f + 1 >= F && map.glass[i]) { glass.push(mtx(x, cy, z)); continue; } // стеклянная крыша
         ceils.push(mtx(x, cy, z));
         const h = Math.sin(cx * 12.9898 + cz * 78.233 + seed + f * 7.1) * 43758.5453;
         if (t !== T.STAIR && st.panel.test(cx, cz, h - Math.floor(h))) panels.push(mtx(x, cy - 0.02, z));
@@ -189,6 +204,11 @@ export function buildLevelGeometry(map, mats, st, seed, panelMat) {
   add(instanced(new THREE.BoxGeometry(TILE, FH, TILE), wallMat, fills));
   add(instanced(stairGeo(FH), floorMat, stairs));
   add(instanced(ladderGeo(FH + 1.1), new THREE.MeshLambertMaterial({ color: 0x8a8f94 }), ladders));
+  // стеклянная крыша: мутное небо в переплёте рам
+  if (glass.length) {
+    const gl = new THREE.PlaneGeometry(TILE, TILE); gl.rotateX(Math.PI / 2);
+    add(instanced(gl, getGlassMat(), glass));
+  }
   const pg = new THREE.PlaneGeometry(st.panel.size, st.panel.size); pg.rotateX(Math.PI / 2);
   add(instanced(pg, panelMat, panels));
 

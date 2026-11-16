@@ -8,7 +8,9 @@ export let A = null;
 export function initAudio() {
   if (A) { A.ctx.resume(); return; }
   const ctx = new (window.AudioContext || window.webkitAudioContext)();
-  const master = ctx.createGain(); master.gain.value = settings.vol; master.connect(ctx.destination);
+  const master = ctx.createGain(); master.gain.value = settings.vol;
+  const under = ctx.createBiquadFilter(); under.type = 'lowpass'; under.frequency.value = 20000; // «подводный» фильтр
+  master.connect(under); under.connect(ctx.destination);
   const hum = ctx.createGain(); hum.gain.value = 0.05;
   const lp = ctx.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 520;
   const humOsc = [];
@@ -25,7 +27,7 @@ export function initAudio() {
   const nb = ctx.createBuffer(1, ctx.sampleRate, ctx.sampleRate);
   const d = nb.getChannelData(0);
   for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1;
-  A = { ctx, master, hum, humOsc, dread: dg, nb, amb: null };
+  A = { ctx, master, under, hum, humOsc, dread: dg, nb, amb: null };
   if (curStyle) setAmbience(curStyle);
 }
 export function setAmbience(st) {
@@ -69,12 +71,20 @@ export const sfx = {
   fl: () => { noiseBurst(2600, 0.04, 0.35, 'highpass'); tone(320, 0.07, 0.2, 'square', 150); },
   roar: () => { tone(130, 1.7, 0.55, 'sawtooth', 42); tone(260, 1.4, 0.3, 'square', 70, 0.05); noiseBurst(900, 1.5, 0.5, 'bandpass'); tone(1400, 0.9, 0.12, 'sawtooth', 300, 0.1); },
   crackle: () => { noiseBurst(5000, 0.12, 0.08, 'highpass'); noiseBurst(4000, 0.08, 0.06, 'highpass'); },
+  valve: () => { tone(90, 0.5, 0.25, 'sawtooth', 60); noiseBurst(700, 0.35, 0.18, 'bandpass'); },
+  drain: () => { noiseBurst(220, 5.0, 0.45); tone(48, 5, 0.3, 'sine', 30); },
+  pump: () => { for (let i = 0; i < 4; i++) tone(55 + i * 6, 2.5, 0.25, 'sawtooth', 70, i * 0.6); noiseBurst(300, 6, 0.35); },
+  splash: () => { noiseBurst(1400, 0.5, 0.35, 'bandpass'); noiseBurst(500, 0.8, 0.25); },
+  bubble: () => { const f = rand(300, 700); tone(f, 0.08, 0.08, 'sine', f * 1.8); },
 };
 
 // Звуки близости существа (гул страха, сердцебиение) и случайные звуки окружения
 let heartT = 0, ambT = 0;
-export function updateAudio(dt, prox) {
+let bubbleT = 0;
+export function updateAudio(dt, prox, underwater = false) {
   if (!A) return;
+  A.under.frequency.setTargetAtTime(underwater ? 420 : 20000, A.ctx.currentTime, 0.08);
+  if (underwater) { bubbleT -= dt; if (bubbleT <= 0) { sfx.bubble(); bubbleT = rand(0.3, 1.2); } }
   A.dread.gain.value += (prox * prox * 0.28 - A.dread.gain.value) * Math.min(1, dt * 4);
   if (prox > 0.08) {
     heartT -= dt;

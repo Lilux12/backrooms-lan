@@ -7,7 +7,7 @@ import { sendNet } from '../net/net.js';
 import { openKeypad } from '../ui/hud.js';
 
 /* ---------- Взаимодействие ---------- */
-const INTERACTIVE = ['box', 'lever', 'note', 'keypad'];
+const INTERACTIVE = ['box', 'lever', 'note', 'keypad', 'valve', 'drain', 'paper', 'lore', 'pump'];
 export function nearestUsable() {
   let best = null, bd = 3.2;
   for (const rec of objs.values()) {
@@ -27,6 +27,11 @@ export function promptFor(o) {
     case 'lever': return '<b>E</b> Дёрнуть рычаг';
     case 'note': return '<b>E</b> Прочитать записку';
     case 'keypad': return '<b>E</b> Ввести код';
+    case 'valve': return `<b>E</b> Повернуть ${['красный', 'синий', 'жёлтый'][o.col]} вентиль (давление ${'●'.repeat(o.val)}${'○'.repeat(3 - o.val)})`;
+    case 'drain': return '<b>E</b> Дёрнуть рычаг СЛИВА';
+    case 'paper': return '<b>E</b> Прочитать: ' + (o.title || 'таблица');
+    case 'lore': return '<b>E</b> ' + (/плёнк|касс/i.test(o.title || '') ? 'Посмотреть: ' : 'Прочитать: ') + (o.title || 'записка');
+    case 'pump': return '<b>E</b> Пульт насоса';
   }
   return '';
 }
@@ -35,5 +40,5 @@ export function useNearest() {
   if (!o) return;
   if (o.kind === 'keypad') { openKeypad(); return; }
   sendNet({ t: 'use', id: o.id });
-  if (o.kind === 'lever') sfx.click();
+  if (o.kind === 'lever' || o.kind === 'valve' || o.kind === 'drain') sfx.click();
 }

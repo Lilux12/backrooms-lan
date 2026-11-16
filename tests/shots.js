@@ -27,6 +27,10 @@ const FIND = `(kind) => {
       return f;
     }
   }
+  if (kind === 'atrium' && m.pools) { // вид на атриум с балкона 3-го этажа
+    window.__br.tp(16.5 * 4, 2 * m.FH, 20 * 4, -Math.PI / 2 - 0.3, -0.45);
+    return 2;
+  }
   return -1;
 }`;
 
@@ -41,7 +45,7 @@ async function main() {
       try {
         const g = await openGame(br.port, `http://localhost:${PORT}/`);
         await g.ev(`document.getElementById('lvl').classList.remove('on')`);
-        for (const kind of ['stair', 'hole', 'pool', 'ladder', 'vent']) {
+        for (const kind of ['stair', 'hole', 'pool', 'ladder', 'vent', 'atrium']) {
           const f = await g.ev(`(${FIND})('${kind}')`);
           if (f < 0) continue;
           await sleep(1500);

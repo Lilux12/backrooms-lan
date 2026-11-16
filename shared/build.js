@@ -45,6 +45,7 @@
     return false;
   }
 
+  const reserved = (map, i) => !!(map.reserved && map.reserved.has(i));
   const farFrom = (list, i, sep) => list.every((j) => Math.max(Math.abs(cellX(j) - cellX(i)), Math.abs(cellZ(j) - cellZ(i))) >= sep);
 
   // Лестницы с этажа f на f+1: 2 клетки ската + площадка наверху
@@ -60,7 +61,7 @@
       if (![c0, c1].every((c) => L[c] === T.FLOOR || L[c] === T.WALL || L[c] === T.LOW)) continue;
       if (![c0, c1].every((c) => U[c] === T.FLOOR || U[c] === T.WALL || U[c] === T.LOW)) continue;
       if (!(U[c2] === T.FLOOR || U[c2] === T.WALL || U[c2] === T.LOW)) continue;
-      if (!farFrom(used, c0, 4)) continue;
+      if (!farFrom(used, c0, 4) || [cb, c0, c1, c2].some((c) => reserved(map, c))) continue;
       // чем меньше прорубать, тем лучше: лестница встраивается в существующие проходы
       const score = (isFlat(L[c0]) ? 1 : 0) + (isFlat(L[c1]) ? 1 : 0) + (isFlat(U[c2]) ? 2 : 0) + rnd() * 0.5;
       cands.push({ cb, d, c0, c1, c2, score });
@@ -90,7 +91,7 @@
       const c = Math.floor(rnd() * NN), d = Math.floor(rnd() * 4);
       if (!inner(cellX(c), cellZ(c)) || L[c] !== T.FLOOR) continue;
       const w = step(c, d);
-      if (w < 0 || L[w] !== T.WALL) continue;
+      if (w < 0 || L[w] !== T.WALL || reserved(map, c) || reserved(map, w)) continue;
       if (!(U[c] === T.FLOOR || U[c] === T.WALL)) continue;
       if (!(U[w] === T.FLOOR || U[w] === T.WALL || U[w] === T.LOW)) continue;
       if (!farFrom(used, c, 5)) continue;
@@ -117,7 +118,7 @@
       for (let z = z0; z < z0 + h && ok; z++) for (let x = x0; x < x0 + w; x++) {
         if (!inner(x, z)) { ok = false; break; }
         const i = idx(x, z);
-        if (L[i] !== T.FLOOR || D[i] !== T.FLOOR) { ok = false; break; }
+        if (L[i] !== T.FLOOR || D[i] !== T.FLOOR || reserved(map, i)) { ok = false; break; }
         cells.push(i);
       }
       if (!ok) continue;
@@ -155,9 +156,11 @@
   }
 
   // Новая зона воды с уровнем поверхности level
-  function addWaterZone(map, cells, level) {
+  // bottom — дно зоны: ниже него в этих колонках воды нет (этажи под бассейном сухие)
+  function addWaterZone(map, cells, level, bottom) {
     const zone = map.wl.length;
     map.wl.push(level);
+    map.wb.push(bottom);
     for (const i of cells) map.wz[i] = zone;
     return zone;
   }
@@ -182,7 +185,7 @@
         const i = idx(x, z);
         L[i] = T.POOL; map.a[f][i] = Math.round(depth * 4); cells.push(i);
       }
-      addWaterZone(map, cells, b - 0.3);
+      addWaterZone(map, cells, b - 0.3, b - depth);
       pools.push({ x0, z0, w, h, cells });
     }
     return pools;
@@ -203,7 +206,7 @@
         }
       }
       if (cells.length < size / 2) continue;
-      return addWaterZone(map, cells, b + level);
+      return addWaterZone(map, cells, b + level, b);
     }
     return -1;
   }
@@ -214,7 +217,7 @@
     let n = 0;
     for (let k = 0; k < 900 && n < count; k++) {
       const w = Math.floor(rnd() * NN), d = Math.floor(rnd() * 4);
-      if (!inner(cellX(w), cellZ(w)) || L[w] !== T.WALL) continue;
+      if (!inner(cellX(w), cellZ(w)) || L[w] !== T.WALL || reserved(map, w)) continue;
       const a = step(w, d ^ 1), b1 = step(w, d), b2 = step(w, d, 2);
       if (a < 0 || b1 < 0 || !isFlat(L[a])) continue;
       if (L[b1] === T.FLOOR) { L[w] = T.VENT; n++; continue; }
@@ -231,7 +234,7 @@
       let c = Math.floor(rnd() * NN);
       if (L[c] !== T.FLOOR) continue;
       for (let s = 0; s < len; s++) {
-        if (L[c] !== T.FLOOR) break;
+        if (L[c] !== T.FLOOR || reserved(map, c)) break;
         if (f + 1 < map.F && map.t[f + 1][c] === T.HOLE) break;
         L[c] = T.LOW;
         const nb = [0, 1, 2, 3].map((d) => step(c, d)).filter((j) => j >= 0 && L[j] === T.FLOOR);
@@ -258,6 +261,46 @@
           if (f + 1 < map.F && map.t[f + 1][i] === T.HOLE) map.t[f + 1][i] = T.FLOOR;
         }
       }
+    }
+  }
+
+  // Соединить все связные куски пола этажа f с самым большим: коридоры сквозь стены в обход зарезервированных клеток
+  function connectFloor(map, f) {
+    const L = map.t[f];
+    const walk = (i) => isFlat(L[i]) || L[i] === T.LADDER;
+    const skipped = new Set(); // клетки кусков, к которым не пробиться (например, чаша бассейна) — их не трогаем
+    for (let guard = 0; guard < 80; guard++) {
+      const comp = new Int32Array(NN).fill(-1), sizes = [], skip = [];
+      for (let i = 0; i < NN; i++) {
+        if (!walk(i) || comp[i] >= 0) continue;
+        const id = sizes.length, q = [i];
+        comp[i] = id;
+        for (let h = 0; h < q.length; h++) for (let d = 0; d < 4; d++) {
+          const j = step(q[h], d);
+          if (j >= 0 && walk(j) && comp[j] < 0) { comp[j] = id; q.push(j); }
+        }
+        sizes.push(q.length);
+        skip.push(q.some((c) => skipped.has(c)));
+      }
+      const main = sizes.indexOf(Math.max(...sizes));
+      let small = -1;
+      for (let c = 0; c < sizes.length; c++) if (c !== main && !skip[c] && (small < 0 || sizes[c] < sizes[small])) small = c;
+      if (small < 0) return;
+      // BFS от куска сквозь стены до любого другого куска
+      const prev = new Int32Array(NN).fill(-2), q = [];
+      for (let i = 0; i < NN; i++) if (comp[i] === small) { prev[i] = -1; q.push(i); }
+      let hit = -1;
+      for (let h = 0; h < q.length && hit < 0; h++) {
+        for (let d = 0; d < 4; d++) {
+          const j = step(q[h], d);
+          if (j < 0 || prev[j] !== -2) continue;
+          if (comp[j] >= 0 && comp[j] !== small) { prev[j] = q[h]; hit = j; break; }
+          if (L[j] !== T.WALL || reserved(map, j)) continue;
+          prev[j] = q[h]; q.push(j);
+        }
+      }
+      if (hit < 0) { for (let i = 0; i < NN; i++) if (comp[i] === small) skipped.add(i); continue; }
+      for (let p = prev[hit]; p >= 0 && prev[p] !== -1; p = prev[p]) if (L[p] === T.WALL) L[p] = T.FLOOR;
     }
   }
 
@@ -402,7 +445,7 @@
 
   Object.assign(BR, {
     layerFromGrid, carveConnect, addStairs, addLadders, addHoles, addAtrium, addPools, addFlood, addWaterZone,
-    addVents, addLow, fixStairs, finalize, isFlat, cellStep: step,
+    addVents, addLow, fixStairs, finalize, isFlat, cellStep: step, connectFloor,
   });
   if (typeof module === 'object' && module.exports) module.exports = BR;
 })(typeof window !== 'undefined' ? window : globalThis);

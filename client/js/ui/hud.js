@@ -20,9 +20,10 @@ export function showBanner(html) { const b = $('banner'); b.innerHTML = html; b.
 export function hideBanner() { $('banner').style.display = 'none'; }
 
 let noteTimer = 0;
-export function showNote(text) {
+export function showNote(text, title) {
   const n = $('note');
   n.innerHTML = '';
+  if (title) { const h = document.createElement('b'); h.textContent = title; h.style.display = 'block'; h.style.marginBottom = '10px'; n.append(h); }
   n.append(document.createTextNode(text));
   const s = document.createElement('small'); s.textContent = 'E — убрать записку';
   n.append(s);

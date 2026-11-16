@@ -48,7 +48,7 @@ export function gridLines(g, s, step, col, w) {
   }
 }
 
-function glowTexture() {
+export function glowTexture() {
   const c = document.createElement('canvas');
   c.width = c.height = 64;
   const g = c.getContext('2d');

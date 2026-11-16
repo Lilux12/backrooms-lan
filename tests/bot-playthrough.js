@@ -5,12 +5,13 @@ const assert = require('assert');
 const { startServer } = require('./lib/server');
 
 const PORT = 3903;
-const LEVEL_TIMEOUT = 30000;
+const LEVEL_TIMEOUT = 40000;
 const RIDDLES = ['цвет тревоги', 'цвет воды', 'цвет таблички', 'цвет стен']; // по номерам цветов рычагов
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 async function main() {
-  const srv = await startServer(PORT);
+  const FIRST = +(process.env.START_LEVEL || 0);
+  const srv = await startServer(PORT, { START_LEVEL: String(FIRST) });
   const ws = new WebSocket(`ws://localhost:${PORT}`);
   await new Promise((res, rej) => { ws.onopen = res; ws.onerror = rej; });
   const inbox = [];
@@ -34,7 +35,7 @@ async function main() {
   try {
     send({ t: 'join', name: 'Бот' });
     let init = await waitFor((m) => m.t === 'init');
-    for (let level = 0; level < 6; level++) {
+    for (let level = FIRST; level < 6; level++) {
       assert.strictEqual(init.level, level, 'неверный порядок уровней');
       const objs = init.objs, t0 = Date.now();
       const of = (k) => objs.filter((o) => o.kind === k);
@@ -63,6 +64,29 @@ async function main() {
           const lv = of('lever').find((l) => l.col === col);
           await goTo(lv.x + 0.5, lv.y, lv.z); send({ t: 'use', id: lv.id }); await sleep(100);
         }
+      }
+      // Бассейны: таблица давления → вентили → слив → задвижка шлюза → ключ-карта → насос
+      const paper = of('paper')[0];
+      if (paper) {
+        await goTo(paper.x, paper.y, paper.z);
+        send({ t: 'use', id: paper.id });
+        const note = await waitFor((m) => m.t === 'note');
+        const targets = ['КРАСНЫЙ', 'СИНИЙ', 'ЖЁЛТЫЙ'].map((c) => (note.text.split('\n').find((l) => l.startsWith(c)).match(/●/g) || []).length);
+        for (const v of of('valve')) {
+          await goTo(v.x, v.y, v.z);
+          for (let k = 0; k < targets[v.col]; k++) { send({ t: 'use', id: v.id }); await waitFor((m) => m.t === 'obj' && m.id === v.id); }
+        }
+        const dr = of('drain')[0];
+        await goTo(dr.x, dr.y, dr.z); send({ t: 'use', id: dr.id });
+        await waitFor((m) => m.t === 'ev' && m.text.includes('Вода уходит'));
+        await sleep(15000); // вода уходит ~14 с
+        const gp = of('gateplate')[0], kc = of('keycard')[0];
+        await goTo(gp.x, gp.y, gp.z);
+        await waitFor((m) => m.t === 'cell' && m.type === 0, 3000); // шлюз открылся
+        await goTo(kc.x, kc.y, kc.z);
+        await waitFor((m) => m.t === 'pick' && m.kind === 'keycard');
+        const pump = of('pump')[0];
+        await goTo(pump.x, pump.y, pump.z); send({ t: 'use', id: pump.id });
       }
       // Ждём открытия двери и идём к ней
       const door = of('door')[0];

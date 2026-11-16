@@ -3,7 +3,7 @@ import { clamp } from './core/util.js';
 import { FL, S, UP, keys, me } from './core/state.js';
 import { camera, renderer, scene, updateDust } from './render/scene.js';
 import { updateLight } from './render/lighting.js';
-import { H, map } from './world/world.js';
+import { H, fx, map } from './world/world.js';
 import { animateWater } from './world/geometry.js';
 import { animateObjects } from './world/objects.js';
 import { remotes, updateRemotes } from './entities/avatars.js';
@@ -32,11 +32,12 @@ function update(dt) {
   const mobDist = updateMobs(dt);
   animateObjects(dt);
   animateWater(dt);
+  if (fx) fx.update(dt);
   updateBattery(dt);
   updateDust(dt, H);
   updateLight(dt);
   const prox = clamp(1 - mobDist / 34, 0, 1); // 0 — существ рядом нет, 1 — вплотную
-  updateAudio(dt, prox);
+  updateAudio(dt, prox, !!(me.body && me.body.underwater));
   updateHud(dt, prox);
 }
 

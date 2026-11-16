@@ -39,14 +39,45 @@ function buildLevel(idx, seed, team, opts = {}) {
   const e = map.exit;
   G.door = add('door', { x: e.wx, y: e.y, z: e.wz, fx: e.fx, fz: e.fz, dx: e.dx, dz: e.dz, open: false });
 
+  // Записки и кассеты с историей уровня (сюжет без слов)
+  if (cfg.lore) {
+    BR.pickWallSpots(map, rnd, cfg.lore.length, { minDist: 0.1 * maxD, minSep: 6 })
+      .forEach((p, k) => add('lore', { x: p.x, y: p.y, z: p.z, nx: p.nx, nz: p.nz, title: cfg.lore[k].title, text: cfg.lore[k].text }));
+  }
+
+  const list = cfg.mobList || [{ type: cfg.mobType, count: cfg.mobs }];
   if (cfg.chase) {
     G.chaseState = 'idle';
-    for (let i = 0; i < cfg.mobs; i++) { const m = newMob(map, 0, 0, 0, 9999); chasePackPos(G, m, i); G.mobs.push(m); }
+    for (let i = 0; i < cfg.mobs; i++) { const m = newMob(map, 0, 0, 0, 9999, cfg.mobType); chasePackPos(G, m, i); G.mobs.push(m); }
   } else {
-    BR.pickSpots(map, rnd, cfg.mobs, { minDist: 0.55 * maxD, minSep: 8 }).forEach((p) => G.mobs.push(newMob(map, p.x, p.y, p.z, 5)));
+    for (const { type, count } of list) {
+      if (type === 'drowner') {
+        // Утопленник появляется в самой большой зоне глубокой воды
+        for (let k = 0; k < count; k++) {
+          const n = deepestWaterNode(map, rnd);
+          if (n >= 0) { const p = BR.nodePos(map, n); G.mobs.push(newMob(map, p.x, p.y, p.z, 8, 'drowner')); }
+        }
+        continue;
+      }
+      BR.pickSpots(map, rnd, count, { minDist: 0.55 * maxD, minSep: 8 }).forEach((p) => G.mobs.push(newMob(map, p.x, p.y, p.z, 5, type)));
+    }
   }
   if (!cfg.puzzles.length) { G.doorOpen = true; BR.setDoor(map, true); G.door.open = true; } // уровни без головоломки
   return G;
+}
+
+// Узел в самой большой зоне глубокой воды (где можно плавать)
+function deepestWaterNode(map, rnd) {
+  const byZone = new Map();
+  for (let f = 0; f < map.F; f++) for (let i = 0; i < BR.NN; i++) {
+    if (!BR.WALKABLE[map.t[f][i]] || map.wz[i] < 0 || BR.waterDepth(map, f, i) <= 1.2) continue;
+    const z = map.wz[i];
+    if (!byZone.has(z)) byZone.set(z, []);
+    byZone.get(z).push(f * BR.NN + i);
+  }
+  let best = [];
+  for (const list of byZone.values()) if (list.length > best.length) best = list;
+  return best.length ? best[Math.floor(rnd() * best.length)] : -1;
 }
 
 // Стая на уровне-погоне стоит у старта

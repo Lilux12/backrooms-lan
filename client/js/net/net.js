@@ -2,10 +2,10 @@
 import { $, LEVELS } from '../core/util.js';
 import { FL, S, UP, keypad, me } from '../core/state.js';
 import { scene } from '../render/scene.js';
-import { buildWorld, curLevel, objs, removeObj, setWater } from '../world/world.js';
+import { buildWorld, curLevel, objs, removeObj, setCellLocal, setWater } from '../world/world.js';
 import { refreshObj } from '../world/objects.js';
 import { remotes, setPlayers } from '../entities/avatars.js';
-import { ensureMobs, mobEnts } from '../entities/mobs.js';
+import { ensureMob, ensureMobs, mobEnts } from '../entities/mobs.js';
 import { sfx, tone } from '../audio/audio.js';
 import { closeKeypad, hideBanner, renderGoals, setStatus, showBanner, showLevelTitle, showNote, toast, updateKeypad } from '../ui/hud.js';
 import { beginPlay } from '../ui/menu.js';
@@ -14,6 +14,7 @@ import { closeBigMap } from '../ui/maps.js';
 
 /* ============================== Сеть ============================== */
 let ws = null;
+const MOB_TYPES = ['stalker', 'runner', 'drowner']; // как на сервере (server/game.js)
 export function connect(name) {
   if (location.protocol === 'file:') {
     setStatus('Откройте игру через сервер: запустите start.bat (адрес http://localhost:3000)');
@@ -41,7 +42,7 @@ function onNet(m) {
       sendNet({ t: 'hash', level: m.level, hash: built.hash }); // сервер сверит геометрию
       for (const r of remotes.values()) scene.remove(r.mesh);
       remotes.clear();
-      ensureMobs(0, LEVELS[m.level].mobType);
+      ensureMobs(0);
       UP.map = !!(m.upgrades && m.upgrades.map);
       closeBigMap();
       if (LEVELS[m.level].chase) FL.on = false;
@@ -64,9 +65,8 @@ function onNet(m) {
         rem.tx = x; rem.ty = y; rem.tz = z; rem.tr = r; rem.fl = !!fl; rem.crouch = !!cr;
         if (!rem.seen) { rem.x = x; rem.y = y; rem.z = z; rem.r = r; rem.seen = true; rem.mesh.visible = true; }
       }
-      ensureMobs(m.m.length, LEVELS[curLevel].mobType);
-      m.m.forEach(([x, y, z, r, chase, stun], i) => {
-        const mo = mobEnts[i];
+      m.m.forEach(([x, y, z, r, chase, stun, type], i) => {
+        const mo = ensureMob(i, MOB_TYPES[type] || 'stalker');
         mo.tx = x; mo.ty = y; mo.tz = z; mo.tr = r; mo.chase = !!chase; mo.stun = !!stun;
         if (!mo.seen) { mo.x = x; mo.y = y; mo.z = z; mo.r = r; mo.seen = true; mo.group.visible = true; }
       });
@@ -85,7 +85,7 @@ function onNet(m) {
     case 'pick': {
       removeObj(m.id);
       m.kind === 'fuse' ? sfx.fuse() : sfx.pickup();
-      if (m.kind !== 'mapitem') toast(m.kind === 'fuse' ? `${m.by} нашёл предохранитель` : `${m.by} нашёл воду`, 2000);
+      if (m.kind === 'fuse' || m.kind === 'water') toast(m.kind === 'fuse' ? `${m.by} нашёл предохранитель` : `${m.by} нашёл воду`, 2000);
       break;
     }
     case 'upgrade':
@@ -101,7 +101,8 @@ function onNet(m) {
       }
       break;
     }
-    case 'note': showNote(m.text); break;
+    case 'note': showNote(m.text, m.title); break;
+    case 'cell': setCellLocal(m.f, m.i, m.type, m.aux); break;
     case 'codeok': closeKeypad(); sfx.beep(); break;
     case 'codebad': keypad.buf = ''; updateKeypad(); tone(150, 0.5, 0.3, 'sawtooth'); break;
     case 'alarm': S.alarmUntil = performance.now() / 1000 + 6; sfx.alarm(); toast('СИРЕНА! Существа идут на шум!', 3500); break;

@@ -13,8 +13,93 @@ const LOSE_DIST = 45, LOSE_TIME = 6;
 const REPATH = 0.3;          // как часто пересчитывать поле расстояний, с
 const EYE = 2.2;             // высота глаз существа
 
-function newMob(map, x, y, z, stun) {
-  return { x, y, z, r: 0, body: BR.makeBody(x, y, z), mode: 'wander', stun, lost: 0, wp: -1, repath: 0, field: null, fieldGoal: -1, alert: null, node: -1 };
+function newMob(map, x, y, z, stun, type = 'stalker') {
+  return { type, x, y, z, r: 0, body: BR.makeBody(x, y, z), mode: 'wander', stun, lost: 0, wp: -1, repath: 0, field: null, fieldGoal: -1, alert: null, node: BR.nodeAt(map, x, y + 0.1, z) };
+}
+
+/* --------------------------- Утопленник --------------------------- */
+// Живёт только в глубокой воде: двигается по графу узлов, где глубина больше DROWN_DEPTH.
+// Чувствует тех, кто плывёт или идёт по воде; на сушу не выходит. Нет воды — затаивается.
+const DROWN_DEPTH = 1.0, DROWN_SPEED = 3.4, DROWN_RAGE = 4.6, DROWN_SENSE = 26;
+
+function waterGraph(G) {
+  const map = G.map;
+  BR.ensureNav(map);
+  const ver = `${map.navStamp}:${map.waterVer || 0}`;
+  if (G.wg && G.wg.ver === ver) return G.wg;
+  const ok = new Uint8Array(map.nav.total);
+  for (let n = 0; n < map.nav.total; n++) {
+    if (!map.nav.out[n]) continue;
+    const f = Math.floor(n / BR.NN), i = n % BR.NN;
+    if (map.wz[i] >= 0 && BR.waterDepth(map, f, i) > DROWN_DEPTH) ok[n] = 1;
+  }
+  const out = new Array(map.nav.total), inn = new Array(map.nav.total);
+  for (let n = 0; n < map.nav.total; n++) {
+    if (!ok[n]) continue;
+    out[n] = map.nav.out[n].filter((m) => ok[m]);
+    for (const m of out[n]) (inn[m] || (inn[m] = [])).push(n);
+  }
+  G.wg = { ver, ok, nav: { out, inn, total: map.nav.total } };
+  return G.wg;
+}
+
+// Игрок в воде (плывёт или идёт по ней)
+function inWater(G, p) { return BR.waterAt(G.map, p.x, p.z, p.y) > p.y + 0.3; }
+
+function updateDrowner(G, m, dt, players) {
+  const wg = waterGraph(G);
+  const map = G.map;
+  if (m.node < 0 || !wg.ok[m.node]) {
+    // вода ушла — затаиться в ближайшей глубокой воде (или исчезнуть до возвращения воды)
+    let any = -1;
+    for (let n = 0; n < wg.ok.length; n++) if (wg.ok[n]) { any = n; break; }
+    if (any < 0) { m.hidden = true; return; }
+    const p = BR.nodePos(map, any);
+    m.node = any; m.x = p.x; m.z = p.z;
+  }
+  m.hidden = false;
+  if (m.stun > 0) { m.stun -= dt; return; }
+  // цель: ближайший игрок в воде, которого можно «почувствовать»
+  let target = null, bd = DROWN_SENSE;
+  for (const p of players) {
+    if (!inWater(G, p)) continue;
+    const d = Math.hypot(p.x - m.x, p.z - m.z, (p.y - m.y) * 0.5);
+    if (d < bd) { bd = d; target = p; }
+  }
+  let goal = -1;
+  if (target) {
+    m.mode = 'chase';
+    const tn = BR.nodeAt(map, target.x, target.y + 0.1, target.z);
+    goal = tn >= 0 && wg.ok[tn] ? tn : -1;
+  } else m.mode = 'wander';
+  if (goal < 0) {
+    if (m.wp < 0 || !wg.ok[m.wp] || m.wp === m.node) {
+      const cand = [];
+      for (const n of wg.nav.out[m.node] || []) cand.push(n);
+      let n = m.node;
+      for (let k = 0; k < 6 && wg.nav.out[n] && wg.nav.out[n].length; k++) n = wg.nav.out[n][Math.floor(Math.random() * wg.nav.out[n].length)];
+      m.wp = n;
+    }
+    goal = m.wp;
+  }
+  if (!m.field || m.fieldGoal !== goal || m.fieldVer !== wg.ver || (m.repath -= dt) <= 0) {
+    m.field = BR.bfsNav(wg.nav, goal, true); m.fieldGoal = goal; m.fieldVer = wg.ver; m.repath = REPATH;
+  }
+  let next = m.node;
+  if (m.node !== goal && m.field[m.node] > 0) {
+    let bdist = m.field[m.node];
+    for (const n of wg.nav.out[m.node]) if (m.field[n] >= 0 && m.field[n] < bdist) { bdist = m.field[n]; next = n; }
+  }
+  const p = next === goal && target ? target : BR.nodePos(map, next);
+  const speed = (m.rage ? DROWN_RAGE : DROWN_SPEED) * (target ? 1 : 0.5);
+  const dx = p.x - m.x, dz = p.z - m.z, d = Math.hypot(dx, dz);
+  if (d > 0.05) { const s = Math.min(d, speed * dt); m.x += (dx / d) * s; m.z += (dz / d) * s; m.r = Math.atan2(dx, dz); }
+  const here = BR.nodeAt(map, m.x, m.y + 0.5, m.z);
+  if (here >= 0 && wg.ok[here]) m.node = here;
+  // держится под поверхностью; рядом с жертвой — всплывает
+  const wl = BR.waterAt(map, m.x, m.z, BR.nodePos(map, m.node).y);
+  const ty = wl - (target && bd < 6 ? 1.2 : 2.2);
+  m.y += (ty - m.y) * Math.min(1, dt * 3);
 }
 
 const dist3 = (a, b) => Math.hypot(a.x - b.x, (a.y - b.y) * 1.5, a.z - b.z);
@@ -81,6 +166,7 @@ function canSee(G, m, p) {
 }
 
 function updateMob(G, m, dt, players) {
+  if (m.type === 'drowner') { updateDrowner(G, m, dt, players); return; }
   if (m.stun > 0) { m.stun -= dt; return; }
   const speed = BASE_SPEED * G.cfg.mobSpeed;
   let best = null, bd = 1e9;
@@ -108,4 +194,4 @@ function updateMob(G, m, dt, players) {
   mobMove(G, m, dt, m.wp, WANDER_SPEED);
 }
 
-module.exports = { newMob, updateMob, mobMove, randomFloorFar, dist3 };
+module.exports = { newMob, updateMob, mobMove, randomFloorFar, dist3, inWater };

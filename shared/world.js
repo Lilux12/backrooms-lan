@@ -17,7 +17,11 @@
     return {
       F, FH, t, a,
       wz: new Int16Array(NN).fill(-1), // зона воды для каждой колонки (-1 — сухо)
+      wcur: new Uint8Array(NN),        // течение: 0 — нет, 1..4 — направление D4[k-1]
+      glass: new Uint8Array(NN),       // стеклянная крыша над клеткой (только вид)
+      fx: [],                          // декор и эффекты уровня для клиента: пар, буйки, вышки…
       wl: [],                          // уровень поверхности воды каждой зоны (меняется во время игры)
+      wb: [],                          // дно зоны: ниже воды нет
       cols: null, nav: null, navDirty: true,
     };
   }
@@ -88,11 +92,13 @@
   }
 
   /* ------------------------------ Вода ------------------------------ */
-  function waterAt(map, x, z) {
+  // Уровень воды над точкой (x, z) для тела на высоте y (ниже дна зоны — сухо)
+  function waterAt(map, x, z, y = Infinity) {
     const tx = Math.floor(x / TILE), tz = Math.floor(z / TILE);
     if (!inside(tx, tz)) return -Infinity;
     const zone = map.wz[tx + tz * N];
-    return zone >= 0 ? map.wl[zone] : -Infinity;
+    if (zone < 0 || y < map.wb[zone] - 1) return -Infinity;
+    return map.wl[zone];
   }
 
   /* ------------------------------ Физика ------------------------------ */
@@ -103,6 +109,7 @@
     STEP: 0.55,       // на какую высоту можно шагнуть без прыжка
     STEP_SWIM: 1.9,   // из воды можно выбраться на бортик такой высоты
     AIR_STEP: 0.12,   // в прыжке/падении — только на такую ступень
+    CURRENT: 1.3,     // скорость течения, м/с
     GRAV: 22,
     JUMP: 6.2,        // начальная скорость прыжка (~0.9 м)
     CLIMB: 2.6,       // скорость лазания по лестнице
@@ -126,6 +133,16 @@
       for (const iv of map.cols[tx + tz * N]) {
         if (iv.lo < y + h && topAt(iv, fx, fz) > y + step) return true;
       }
+    }
+    return false;
+  }
+
+  // Есть ли низ перекрытия на высоте в [from, to) под телом — значит, подняться туда нельзя
+  function ceilingBetween(map, x, z, r, from, to) {
+    for (const [px, pz] of samplePoints(x, z, r)) {
+      const tx = Math.floor(px / TILE), tz = Math.floor(pz / TILE);
+      if (!inside(tx, tz)) return true;
+      for (const iv of map.cols[tx + tz * N]) if (iv.lo >= from - 0.01 && iv.lo < to) return true;
     }
     return false;
   }
@@ -197,7 +214,7 @@
     else if (b.crouch && !blocked(map, b.x, b.y, b.z, P.R, P.H, P.STEP)) { b.crouch = false; b.h = P.H; }
     if (!b.crouch && blocked(map, b.x, b.y, b.z, P.R, P.H, P.STEP)) { b.crouch = true; b.h = P.H_CROUCH; }
 
-    const wl = waterAt(map, b.x, b.z);
+    const wl = waterAt(map, b.x, b.z, b.y);
     const depth = wl - b.y;
     b.ladder = ladderAt(map, b.x, b.y, b.z);
     b.swim = b.ladder < 0 && depth > P.SWIM_DEPTH;
@@ -208,12 +225,25 @@
     const scale = b.swim ? 0.6 : b.crouch ? 0.5 : b.wade ? 0.7 : 1;
 
     // Горизонталь: по осям раздельно (скольжение вдоль стен), мелкими шагами
-    const dx = inp.vx * scale * dt, dz = inp.vz * scale * dt;
+    let dx = inp.vx * scale * dt, dz = inp.vz * scale * dt;
+    // течение сносит плывущих и идущих по воде
+    const ci = BR.cellAt(b.x, b.z);
+    if ((b.swim || b.wade) && ci >= 0 && map.wcur[ci]) {
+      const [cx, cz] = D4[map.wcur[ci] - 1];
+      dx += cx * P.CURRENT * dt; dz += cz * P.CURRENT * dt;
+    }
     const n = Math.max(1, Math.ceil(Math.max(Math.abs(dx), Math.abs(dz)) / 0.2));
+    // можно ли сдвинуться: не упираемся, и если шагаем вверх — по пути голова не проходит сквозь перекрытие
+    const canGo = (x, z) => {
+      if (blocked(map, x, b.y, z, P.R, b.h, step)) return false;
+      const g = groundAt(map, x, b.y, z, P.R, step);
+      if (g <= b.y + 0.01) return true;
+      return !ceilingBetween(map, b.x, b.z, P.R, b.y + b.h, g + b.h) && !ceilingBetween(map, x, z, P.R, b.y + b.h, g + b.h);
+    };
     for (let k = 0; k < n; k++) {
       const sx = dx / n, sz = dz / n;
-      if (sx && !blocked(map, b.x + sx, b.y, b.z, P.R, b.h, step)) b.x += sx;
-      if (sz && !blocked(map, b.x, b.y, b.z + sz, P.R, b.h, step)) b.z += sz;
+      if (sx && canGo(b.x + sx, b.z)) b.x += sx;
+      if (sz && canGo(b.x, b.z + sz)) b.z += sz;
       // подъём на ступень сразу, чтобы следующий подшаг шёл от новой высоты
       const g = groundAt(map, b.x, b.y, b.z, P.R, step);
       if (g > b.y && (b.onGround || b.swim || b.ladder >= 0)) b.y = g;
@@ -334,7 +364,8 @@
     const zone = map.wz[i];
     if (zone < 0) return 0;
     const floorTop = f * map.FH - (map.t[f][i] === T.POOL ? map.a[f][i] * 0.25 : 0);
-    return map.wl[zone] - floorTop;
+    if (floorTop < map.wb[zone] - 1) return 0;
+    return Math.max(0, map.wl[zone] - floorTop);
   }
 
   // Граф для игроков и для обычных существ (без лазов и глубокой воды); пересобирается после изменений карты
@@ -396,6 +427,7 @@
       if (b.y < p.y - 0.05) return inp; // лезем, пока не поднимемся на уровень площадки
     }
     if (b.swim && p.y > b.y + 0.2) inp.up = true;
+    if (b.swim && (p.y < b.y - 0.3 || tn === T.VENT)) inp.down = true; // нырнуть в лаз или под воду
     if (b.ladder >= 0 && p.y < b.y - 0.5) inp.down = true;
     const dx = p.x - b.x, dz = p.z - b.z, dist = Math.hypot(dx, dz);
     if (dist > 0.05) {
@@ -410,7 +442,7 @@
 
   /* ------------------------------ Хэш ------------------------------ */
   function mapHash(map) {
-    return BR.hashArrays([...map.t, ...map.a, map.wz, new Float32Array(map.wl), new Float32Array([map.F, map.FH])]);
+    return BR.hashArrays([...map.t, ...map.a, map.wz, map.wcur, new Float32Array(map.wl), new Float32Array(map.wb), new Float32Array([map.F, map.FH])]);
   }
 
   Object.assign(BR, {

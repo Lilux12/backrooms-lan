@@ -3,12 +3,11 @@ import * as THREE from 'three';
 import { clamp, lerpAngle } from '../core/util.js';
 import { S, me } from '../core/state.js';
 import { scene } from '../render/scene.js';
-import { glowSprite, lam } from '../render/textures.js';
+import { basic, glowSprite, lam } from '../render/textures.js';
 import { limb } from './avatars.js';
 
 // Существа
 export const mobEnts = [];
-let mobType = 'stalker';
 function faceTexture(kind) {
   const c = document.createElement('canvas'); c.width = 512; c.height = 256;
   const g = c.getContext('2d');
@@ -55,6 +54,18 @@ function makeMob(type) {
     body.add(torso, coat, head, glow, parts.armL, parts.armR);
     body.position.y = 0; body.rotation.x = 0.45; body.position.z = 0.15;
     g.add(body, parts.legL, parts.legR);
+  } else if (type === 'drowner') {
+    // Утопленник: раздутое бледное тело, длинные руки тянутся вперёд, волосы-водоросли
+    const skin = lam(0x8fa79c, 0x0c1a14), dark = lam(0x2a3a30, 0x050a08);
+    const torso = new THREE.Mesh(new THREE.SphereGeometry(0.42, 16, 12), skin); torso.scale.set(1, 1.35, 0.85); torso.position.y = 1.2;
+    const head = new THREE.Mesh(new THREE.SphereGeometry(0.24, 16, 12), skin); head.position.set(0, 1.95, 0.08);
+    const eyes = new THREE.Mesh(new THREE.BoxGeometry(0.22, 0.05, 0.02), basic(0xe8f0d0)); eyes.position.set(0, 1.98, 0.3);
+    const mouth = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.16, 0.02), basic(0x050505)); mouth.position.set(0, 1.82, 0.3);
+    for (let k = 0; k < 9; k++) { const h = new THREE.Mesh(new THREE.CylinderGeometry(0.015, 0.005, 0.9, 4), dark); h.position.set((k - 4) * 0.05, 1.7, -0.12 + Math.abs(k - 4) * 0.02); h.rotation.x = 0.2; body.add(h); }
+    parts.armL = limb(1.7, 0.07, 0.04, skin, -0.42, 1.55, 0.1); parts.armR = limb(1.7, 0.07, 0.04, skin, 0.42, 1.55, 0.1);
+    parts.legL = limb(0.9, 0.1, 0.06, skin, -0.16, 0.8, 0); parts.legR = limb(0.9, 0.1, 0.06, skin, 0.16, 0.8, 0);
+    body.add(torso, head, eyes, mouth, parts.armL, parts.armR);
+    g.add(body, parts.legL, parts.legR);
   } else {
     const black = lam(0x090909, 0x030303);
     const torso = new THREE.Mesh(new THREE.CylinderGeometry(0.16, 0.24, 1.25, 10), black); torso.position.y = 1.75;
@@ -72,10 +83,15 @@ function makeMob(type) {
   g.visible = false; scene.add(g);
   return { group: g, parts, type, x: 0, y: 0, z: 0, r: 0, tx: 0, ty: 0, tz: 0, tr: 0, chase: false, stun: false, seen: false, walk: 0 };
 }
-export function ensureMobs(n, type) {
-  if (type && type !== mobType) { while (mobEnts.length) scene.remove(mobEnts.pop().group); mobType = type; }
-  while (mobEnts.length < n) mobEnts.push(makeMob(mobType));
+// Оставить только первые n существ
+export function ensureMobs(n) {
   while (mobEnts.length > n) scene.remove(mobEnts.pop().group);
+}
+// Существо с номером i нужного типа (модель пересоздаётся, если тип сменился)
+export function ensureMob(i, type) {
+  while (mobEnts.length <= i) mobEnts.push(makeMob(type));
+  if (mobEnts[i].type !== type) { scene.remove(mobEnts[i].group); mobEnts[i] = makeMob(type); }
+  return mobEnts[i];
 }
 
 // Интерполяция и анимация существ. Возвращает расстояние до ближайшего активного существа.
@@ -94,7 +110,11 @@ export function updateMobs(dt) {
     mo.group.rotation.y = mo.r;
     const amp = clamp(sp / 3, 0.15, 1);
     const sw = Math.sin(mo.walk) * (run ? 1.0 : 0.55) * amp;
-    if (run) {
+    if (mo.type === 'drowner') {
+      mo.parts.armL.rotation.x = -1.4 + Math.sin(S.time * 2.2) * 0.25; mo.parts.armR.rotation.x = -1.4 + Math.cos(S.time * 2.2) * 0.25;
+      mo.parts.body.rotation.x = 0.5;
+      mo.group.rotation.z = Math.sin(S.time * 1.1) * 0.08;
+    } else if (run) {
       mo.group.rotation.z = 0;
       mo.parts.body.rotation.x = 0.35 + 0.25 * amp + Math.sin(mo.walk * 2) * 0.05;
       mo.parts.body.position.y = Math.abs(Math.sin(mo.walk)) * 0.12 * amp;

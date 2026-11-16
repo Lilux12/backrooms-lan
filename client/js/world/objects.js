@@ -4,7 +4,7 @@ import { BR, TILE, rand } from '../core/util.js';
 import { S } from '../core/state.js';
 import { basic, glowSprite, lam, textPlane } from '../render/textures.js';
 import { G, H, map, objs } from './world.js';
-import { bx } from './props.js';
+import { bx, cy } from './props.js';
 
 let arrowMat = null;
 function getArrowMat() {
@@ -146,6 +146,90 @@ export function createObj(o) {
       grp.rotation.y = Math.atan2(-o.dx, -o.dz);
       break;
     }
+    case 'valve': {
+      // большой вентиль на трубе с манометром (стрелка показывает давление 0..3)
+      const col = [0xc8302a, 0x2f62c8, 0xd8b020][o.col];
+      const pipe = cy(0.16, 0.16, 2.2, lam(0x5a6066), 0, 1.1, 0, 12);
+      const wheel = new THREE.Mesh(new THREE.TorusGeometry(0.42, 0.05, 8, 20), lam(col, col & 0x333333));
+      wheel.position.set(0, 1.25, 0.24);
+      for (let k = 0; k < 3; k++) { const sp = bx(0.8, 0.04, 0.04, lam(col), 0, 1.25, 0.24); sp.rotation.z = k * Math.PI / 3; grp.add(sp); }
+      const dial = new THREE.Mesh(new THREE.CircleGeometry(0.2, 20), new THREE.MeshBasicMaterial({ color: 0xf2efe2 }));
+      dial.position.set(0, 1.9, 0.18);
+      const needle = bx(0.02, 0.17, 0.01, basic(0x111111), 0, 0.07, 0);
+      const nPivot = new THREE.Group(); nPivot.position.set(0, 1.9, 0.19); nPivot.add(needle);
+      for (let k = 0; k <= 3; k++) { const t = bx(0.015, 0.05, 0.01, basic(k ? 0x222222 : 0xaa2222), 0, 0.16, 0); const g2 = new THREE.Group(); g2.position.copy(nPivot.position); g2.rotation.z = 1.2 - k * 0.8; g2.add(t); grp.add(g2); }
+      grp.add(pipe, wheel, dial, nPivot, glowSprite(col, 1.4, 0.25));
+      grp.children[grp.children.length - 1].position.y = 1.3;
+      grp.position.set(o.x, 0, o.z);
+      rec.parts = { wheel, needle: nPivot }; rec.face = true;
+      break;
+    }
+    case 'drain': {
+      const base = bx(0.7, 1.0, 0.5, lam(0x3a3f45), 0, 0.5, 0);
+      const arm = new THREE.Group(); arm.position.set(0, 1.05, 0);
+      arm.add(cy(0.05, 0.05, 0.9, lam(0xb0b4b8), 0, 0.45, 0, 8), new THREE.Mesh(new THREE.SphereGeometry(0.13, 12, 10), lam(0xff3020, 0x551008)));
+      arm.children[1].position.y = 0.92; arm.rotation.z = 0.8;
+      const sign = textPlane((g) => { g.fillStyle = '#d8d2b0'; g.fillRect(20, 80, 216, 96); g.fillStyle = '#7a1a10'; g.font = 'bold 44px Courier New'; g.textAlign = 'center'; g.fillText('СЛИВ', 128, 142); }, 0.8);
+      sign.position.set(0, 0.6, 0.26);
+      grp.add(base, arm, sign, glowSprite(0xff5030, 1.4, 0.3));
+      grp.children[3].position.y = 1.6;
+      grp.position.set(o.x, 0, o.z);
+      rec.parts.arm = arm; rec.face = true;
+      break;
+    }
+    case 'paper': case 'lore': {
+      // записка/кассета: на стене (если есть нормаль) или на подставке
+      const isTape = o.kind === 'lore' && /плёнк|касс/i.test(o.title || '');
+      const m = textPlane((g) => {
+        g.save(); g.translate(128, 128); g.rotate(0.04);
+        if (isTape) {
+          g.fillStyle = '#1a1a1a'; g.fillRect(-100, -62, 200, 124); g.fillStyle = '#d8d0b0'; g.fillRect(-80, -48, 160, 34);
+          g.fillStyle = '#444'; g.beginPath(); g.arc(-45, 22, 20, 0, 7); g.arc(45, 22, 20, 0, 7); g.fill();
+        } else {
+          g.fillStyle = o.kind === 'paper' ? '#dfe8e8' : '#e9e2c6'; g.fillRect(-90, -110, 180, 220);
+          g.fillStyle = 'rgba(40,34,18,.7)';
+          for (let i = 0; i < 9; i++) g.fillRect(-70, -85 + i * 22, 100 + ((i * 37) % 40), 4);
+        }
+        g.restore();
+      }, 0.9);
+      if (o.nx !== undefined) { m.position.set(o.x, 1.5, o.z); m.rotation.y = Math.atan2(o.nx, o.nz); grp.add(m); }
+      else {
+        const stand = bx(0.5, 1.1, 0.4, lam(0x4a4f55), 0, 0.55, 0);
+        m.rotation.x = -Math.PI / 2.6; m.position.set(0, 1.2, 0);
+        const g2 = new THREE.Group(); g2.add(stand, m); g2.position.set(o.x, 0, o.z); grp.add(g2);
+      }
+      const gl = glowSprite(0xfff0b0, 1.3, 0.25); gl.position.set(o.x + (o.nx || 0) * 0.2, 1.5, o.z + (o.nz || 0) * 0.2); grp.add(gl);
+      break;
+    }
+    case 'gateplate': {
+      const base = new THREE.Mesh(new THREE.BoxGeometry(2.2, 0.12, 2.2), lam(0x2f3a40));
+      base.position.y = 0.06;
+      const top = new THREE.Mesh(new THREE.BoxGeometry(1.7, 0.14, 1.7), new THREE.MeshLambertMaterial({ color: 0x2a6080, emissive: 0x0a2030 }));
+      top.position.y = 0.09;
+      grp.add(base, top);
+      grp.position.set(o.x, 0, o.z);
+      rec.parts.top = top;
+      rec.glow = glowSprite(0x40c0ff, 3.4, 0.2); rec.glow.position.y = 0.4; grp.add(rec.glow);
+      break;
+    }
+    case 'keycard': {
+      const card = bx(0.5, 0.32, 0.02, lam(0xe8e8e8, 0x404040), 0, 0, 0);
+      const stripe = bx(0.5, 0.07, 0.025, basic(0x2050c0), 0, 0.08, 0);
+      const chip = bx(0.08, 0.06, 0.03, basic(0xd0a030), -0.15, -0.04, 0);
+      grp.add(card, stripe, chip, glowSprite(0x80b0ff, 1.6, 0.6));
+      grp.position.set(o.x, 1.0, o.z); rec.bob = true;
+      break;
+    }
+    case 'pump': {
+      const body = bx(1.2, 1.4, 0.7, lam(0x355060), 0, 0.7, 0);
+      const screen = new THREE.Mesh(new THREE.PlaneGeometry(0.7, 0.35), new THREE.MeshBasicMaterial({ color: 0xff3020 }));
+      screen.position.set(0, 1.1, 0.36);
+      const slot = bx(0.25, 0.04, 0.05, basic(0x111111), 0, 0.75, 0.36);
+      grp.add(body, screen, slot, cy(0.12, 0.12, 1.4, lam(0x5a6066), 0.75, 0.7, 0, 10));
+      grp.position.set(o.x, 0, o.z);
+      rec.parts.screen = screen; rec.face = true;
+      break;
+    }
     case 'door': {
       G.doorObj = o;
       const alongX = o.dx !== 0;
@@ -187,6 +271,13 @@ export function refreshObj(rec) {
   } else if (o.kind === 'lever') {
     p.arm.rotation.z = o.on ? -0.9 : 0.9;
     p.lampM.material.color.setHex(o.on ? 0x30ff60 : 0x661010);
+  } else if (o.kind === 'valve') {
+    p.needle.rotation.z = 1.2 - o.val * 0.8;
+    p.wheel.rotation.z = o.val * 1.4;
+  } else if (o.kind === 'gateplate') {
+    p.top.material.color.setHex(o.on ? 0x30d0ff : 0x2a6080);
+    rec.glow.material.opacity = o.on ? 0.6 : 0.2;
+    p.top.position.y = o.on ? 0.05 : 0.09;
   } else if (o.kind === 'door') {
     p.slab.visible = p.stripe.visible = !o.open;
     p.portal.visible = !!o.open;

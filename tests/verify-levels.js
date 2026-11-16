@@ -71,16 +71,39 @@ function verifyLevel(lv, BRB) {
     }
     // объекты уровня так, как их расставит сервер
     const G = buildLevel(lv, seed, {});
-    BR.setDoor(G.map, true);
-    const nav2 = BR.ensureNav(G.map);
-    const r2 = BR.bfsNav(nav2, G.map.spawnNode);
-    assert(r2[G.map.exit.frontNode] >= 0, `${tag}: выход недостижим`);
-    for (const o of G.objs) {
-      if (o.kind === 'arrow' || o.kind === 'door') continue;
+    const objNode = (o) => {
       // настенные объекты стоят на границе клетки — проверяем клетку перед стеной
       const px = o.nx !== undefined ? o.x + o.nx * 1.5 : o.x, pz = o.nz !== undefined ? o.z + o.nz * 1.5 : o.z;
-      const n = BR.nodeAt(G.map, px, o.y + 0.1, pz);
-      assert(n >= 0 && r2[n] >= 0, `${tag}: объект ${o.kind} (${o.x.toFixed(1)}, ${o.y}, ${o.z.toFixed(1)}) недостижим`);
+      return BR.nodeAt(G.map, px, o.y + 0.1, pz);
+    };
+    const L = BR.LEVELS[lv];
+    const gen = L.custom && BR.LEVEL_GENS[L.custom];
+    if (gen && gen.states) {
+      // пошаговая головоломка: на каждом шаге — свои обязательные объекты и отсутствие ловушек
+      for (const st of gen.states(G.map)) {
+        st.apply();
+        G.map.navDirty = true;
+        if (st.exit) BR.setDoor(G.map, true);
+        const nv = BR.ensureNav(G.map);
+        const r = BR.bfsNav(nv, G.map.spawnNode), bk = BR.bfsNav(nv, G.map.spawnNode, true);
+        for (let n = 0; n < nv.total; n++) if (r[n] >= 0 && bk[n] < 0) assert.fail(`${tag}, шаг «${st.name}»: ловушка в узле ${n}`);
+        for (const o of G.objs) {
+          if (!st.need.includes(o.kind)) continue;
+          const n = objNode(o);
+          assert(n >= 0 && r[n] >= 0, `${tag}, шаг «${st.name}»: объект ${o.kind} недостижим`);
+        }
+        if (st.exit) assert(r[G.map.exit.frontNode] >= 0, `${tag}: выход недостижим`);
+      }
+    } else {
+      BR.setDoor(G.map, true);
+      const nav2 = BR.ensureNav(G.map);
+      const r2 = BR.bfsNav(nav2, G.map.spawnNode);
+      assert(r2[G.map.exit.frontNode] >= 0, `${tag}: выход недостижим`);
+      for (const o of G.objs) {
+        if (o.kind === 'arrow' || o.kind === 'door') continue;
+        const n = objNode(o);
+        assert(n >= 0 && r2[n] >= 0, `${tag}: объект ${o.kind} (${o.x.toFixed(1)}, ${o.y}, ${o.z.toFixed(1)}) недостижим`);
+      }
     }
     // физика против графа: все «особые» рёбра на первых seed, выборка обычных
     if (s < 12) {
