@@ -29,7 +29,7 @@ nameInput.addEventListener('keydown', (e) => { e.stopPropagation(); if (e.key ==
 document.addEventListener('pointerlockchange', () => {
   S.locked = document.pointerLockElement === renderer.domElement;
   if (!S.locked && !S.ghostCursor) closeBigMap();
-  if (social.chatOpen || social.asked || S.ghostCursor) return; // курсор нужен для чата/карты — это не пауза
+  if (social.chatOpen || social.asked || S.ghostCursor || S.adminOpen) return; // курсор нужен для чата/карты/панели — это не пауза
   if (S.started && S.joined && !S.locked) {
     $('subtitle').textContent = 'ПАУЗА · КЛИК, ЧТОБЫ ПРОДОЛЖИТЬ (существо не ждёт!)';
     $('play').textContent = 'ПРОДОЛЖИТЬ';

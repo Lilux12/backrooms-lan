@@ -268,8 +268,8 @@
       else b.vy = Math.max(-1.5, Math.min(1.5, (wl - P.FLOAT - b.y) * 2.5));
       b.onGround = false;
     } else {
-      if (inp.jump && b.onGround && !b.crouch) { b.vy = P.JUMP; b.onGround = false; }
-      b.vy -= P.GRAV * dt;
+      if (inp.jump && b.onGround && !b.crouch) { b.vy = P.JUMP * (inp.jumpMul || 1); b.onGround = false; }
+      b.vy -= P.GRAV * (inp.grav || 1) * dt; // хост может менять гравитацию
     }
     let ny = b.y + b.vy * dt;
     if (b.vy > 0 && blocked(map, b.x, ny, b.z, P.R, b.h, 0.02)) { ny = b.y; b.vy = 0; } // удар головой

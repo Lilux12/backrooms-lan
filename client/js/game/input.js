@@ -9,6 +9,7 @@ import { toggleBigMap } from '../ui/maps.js';
 import { toggleTorch } from './player.js';
 import { onSocialKey, social } from './social.js';
 import { onSpectatorKey, placeMarkAhead, spec } from './spectator.js';
+import { toggleAdmin } from '../ui/admin.js';
 
 addEventListener('keydown', (e) => {
   if (keypad.open) {
@@ -21,7 +22,8 @@ addEventListener('keydown', (e) => {
     } else if (e.code === 'KeyQ' || e.code === 'KeyE') closeKeypad();
     return;
   }
-  if (social.chatOpen || social.asked) return;
+  if ((e.code === 'F1' || e.code === 'Backquote') && S.joined) { e.preventDefault(); toggleAdmin(); return; }
+  if (social.chatOpen || social.asked || S.adminOpen) return;
   if (S.joined && S.locked && !e.repeat && onSpectatorKey(e.code)) { e.preventDefault(); return; }
   if (S.joined && (S.locked || social.caged || spec.dead) && !e.repeat && onSocialKey(e.code)) { e.preventDefault(); return; }
   if (S.joined && S.locked && !e.repeat && !spec.dead && !social.caged) {

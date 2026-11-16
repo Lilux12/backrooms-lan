@@ -28,5 +28,9 @@ server.listen(config.PORT, '0.0.0.0', () => {
       if (i.family === 'IPv4' && !i.internal) console.log(`  Друг (по локальной сети): http://${i.address}:${config.PORT}`);
     }
   }
+  const { TOKEN } = require('./admin');
+  console.log(`\nАдмин-панель хоста (F1 в игре). Откройте у себя эту ссылку — права выдадутся сами:`);
+  console.log(`  http://localhost:${config.PORT}/#admin=${TOKEN}`);
+  console.log(`  (или введите токен в панели: ${TOKEN})`);
   console.log('\nЧтобы остановить сервер — закройте окно или нажмите Ctrl+C.\n');
 });

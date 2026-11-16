@@ -8,6 +8,7 @@ import { sfx } from '../audio/audio.js';
 import { toast } from '../ui/hud.js';
 import { sendNet } from '../net/net.js';
 import { social } from './social.js';
+import { W, myMods, padUnder } from './worldfx.js';
 
 const WALK = 3.6, RUN = 6.2;
 const O2_TIME = 25;           // секунд под водой до потери сознания
@@ -16,6 +17,7 @@ const HARD_FALL = 4.5;        // с такой высоты приземлени
 const EYE = 1.6, EYE_CROUCH = 0.8;
 
 export function toggleTorch() {
+  if (myMods().notorch) { toast('Хост забрал у вас фонарик', 1800); FL.on = false; return; }
   if (!FL.on && FL.bat < 0.04) { toast('Батарея села — подождите', 1800); return; }
   FL.on = !FL.on; sfx.fl();
 }
@@ -40,19 +42,21 @@ export function updateMovement(dt) {
   let moving = false, sprint = false;
   if (!(S.joined && map && me.body)) return { moving, sprint };
   const b = me.body;
-  const active = S.locked && !keypad.open && !S.bigOn && !social.caged;
+  const md = myMods();
+  const active = S.locked && !keypad.open && !S.bigOn && !social.caged && !md.frozen && !S.adminOpen;
   let ix = 0, iz = 0;
   if (active) {
     if (keys.KeyW || keys.ArrowUp) iz += 1;
     if (keys.KeyS || keys.ArrowDown) iz -= 1;
     if (keys.KeyD || keys.ArrowRight) ix += 1;
     if (keys.KeyA || keys.ArrowLeft) ix -= 1;
+    if (W.invert) { ix = -ix; iz = -iz; } // хост перевернул управление
   }
   moving = !!(ix || iz);
   const len = Math.hypot(ix, iz) || 1; ix /= len; iz /= len;
   const crouch = active && !!keys.KeyC;
   sprint = moving && active && (keys.ShiftLeft || keys.ShiftRight) && !me.exhausted && me.stamina > 0 && !crouch && !b.swim;
-  let spd = sprint ? RUN : WALK;
+  let spd = (sprint ? RUN : WALK) * (md.speed || 1);
   if (me.stunned > 0) { me.stunned -= dt; spd *= 0.45; }
   const fx = -Math.sin(me.yaw), fz = -Math.cos(me.yaw), rx = Math.cos(me.yaw), rz = -Math.sin(me.yaw);
   const onLadder = b.ladder >= 0;
@@ -64,7 +68,22 @@ export function updateMovement(dt) {
     down: active && (onLadder ? (keys.KeyS || keys.ArrowDown || keys.KeyC) : (b.swim && keys.KeyC)),
     crouch: crouch && !b.swim && !onLadder,
   };
-  const res = BR.moveBody(map, b, inp, dt);
+  if (me.knock && me.knock.t > 0) { inp.vx += me.knock.vx; inp.vz += me.knock.vz; me.knock.t -= dt; } // отбросило взрывом
+  inp.jumpMul = md.jump || 1; inp.grav = W.gravity;
+  let res = { landed: 0 };
+  if (md.fly || md.noclip) {
+    // полёт: Пробел — вверх, C — вниз; сквозь стены — без столкновений
+    const vy = active ? ((keys.Space ? 1 : 0) - (keys.KeyC ? 1 : 0)) * spd : 0;
+    const nx = b.x + inp.vx * dt, ny = b.y + vy * dt, nz = b.z + inp.vz * dt;
+    const free = (x, y, z) => md.noclip || !BR.blocked(map, x, y, z, BR.PHYS.R, BR.PHYS.H, 0.05);
+    if (free(nx, b.y, b.z)) b.x = nx;
+    if (free(b.x, b.y, nz)) b.z = nz;
+    if (free(b.x, ny, b.z)) b.y = ny;
+    b.vy = 0; b.onGround = false; b.fallTop = b.y;
+  } else {
+    res = BR.moveBody(map, b, inp, dt);
+    if (b.onGround && padUnder(b.x, b.y, b.z)) { b.vy = 14; b.onGround = false; sfx.boing(); } // батут
+  }
   pushOutObstacles(b);
   me.x = b.x; me.y = b.y; me.z = b.z;
   if (res.landed > 1.2) sendNet({ t: 'fall', h: +res.landed.toFixed(2) }); // сервер решит, смертельно ли
@@ -102,12 +121,13 @@ export function updateCamera(dt, moving, sprint) {
   const b = me.body;
   const bobY = moving ? Math.sin(me.bob) * (sprint ? 0.075 : 0.045) : 0;
   const bobX = moving ? Math.cos(me.bob * 0.5) * 0.03 : 0;
-  eye += ((b && b.crouch ? EYE_CROUCH : EYE) - eye) * Math.min(1, dt * 10);
+  eye += ((b && b.crouch ? EYE_CROUCH : EYE) * (myMods().size || 1) - eye) * Math.min(1, dt * 10);
   me.shake = Math.max(0, (me.shake || 0) - dt);
   const sh = me.shake * 0.3;
   camera.position.set(me.x + bobX + (Math.random() - 0.5) * sh, me.y + eye + bobY + (Math.random() - 0.5) * sh, me.z);
   camera.rotation.set(me.pitch, me.yaw, 0);
-  me.fov += ((sprint ? settings.fov + 7 : settings.fov) - me.fov) * Math.min(1, dt * 8);
+  const baseFov = W.fov || settings.fov; // хост может задать угол обзора всем
+  me.fov += ((sprint ? baseFov + 7 : baseFov) - me.fov) * Math.min(1, dt * 8);
   if (Math.abs(camera.fov - me.fov) > 0.05) { camera.fov = me.fov; camera.updateProjectionMatrix(); }
 }
 

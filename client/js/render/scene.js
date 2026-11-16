@@ -5,8 +5,11 @@ import { settings } from '../core/settings.js';
 
 /* =============================== Сцена =============================== */
 export const renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
-export function applyQuality() {
-  renderer.setPixelRatio(Math.min(window.devicePixelRatio * settings.q, 2.2));
+let qOverride = null;
+// q — масштаб разрешения; override (например, фильтр «8-бит») временно заменяет настройку
+export function applyQuality(override) {
+  if (override !== undefined) qOverride = override;
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio * (qOverride || settings.q), 2.2));
   renderer.setSize(innerWidth, innerHeight);
 }
 applyQuality();

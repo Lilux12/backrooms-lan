@@ -56,6 +56,7 @@ function makeAvatar(id, name) {
   const tag = nameSprite(name);
   g.add(torso, hip, neck, head, cap, eyes, pack, parts.armL, parts.armR, parts.legL, parts.legR, torch, beam, beamGlow, tag);
   g.userData.nameTag = tag;
+  parts.shirt = shirt;
   g.userData.parts = parts;
   return g;
 }
@@ -75,7 +76,7 @@ export function setPlayers(list) {
     else {
       const mesh = makeAvatar(p.id, p.name);
       mesh.visible = false; scene.add(mesh);
-      remotes.set(p.id, { mesh, parts: mesh.userData.parts, nameTag: mesh.userData.nameTag, x: 0, y: 0, z: 0, r: 0, tx: 0, ty: 0, tz: 0, tr: 0, crouch: false, name: p.name, seen: false, fl: false, walk: 0, wave: 0 });
+      remotes.set(p.id, { id: p.id, mesh, parts: mesh.userData.parts, nameTag: mesh.userData.nameTag, x: 0, y: 0, z: 0, r: 0, tx: 0, ty: 0, tz: 0, tr: 0, crouch: false, name: p.name, seen: false, fl: false, walk: 0, wave: 0 });
     }
   }
   for (const [id, r] of remotes) if (!ids.has(id)) { scene.remove(r.mesh); remotes.delete(id); }
@@ -100,5 +101,6 @@ export function updateRemotes(dt) {
     r.mesh.position.set(r.x, r.y + Math.abs(Math.sin(r.walk)) * 0.04 * am, r.z);
     r.mesh.scale.y += ((r.crouch ? 0.6 : 1) - r.mesh.scale.y) * k; // присед
     r.mesh.rotation.y = r.r + Math.PI;
+    if (r.nameTag) r.nameTag.material.color.setHex(r.tagged ? 0xff4040 : 0xffffff); // «водит» в догонялках
   }
 }

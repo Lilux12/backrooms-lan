@@ -262,6 +262,20 @@ export function createObj(o) {
       grp.position.set(o.x, 1.0, o.z); rec.bob = true;
       break;
     }
+    case 'pad': {
+      grp.add(cy(1.0, 1.0, 0.12, lam(0x3070ff, 0x081840), 0, 0.3, 0, 20), cy(1.05, 1.05, 0.06, lam(0x222222), 0, 0.22, 0, 20));
+      for (let k = 0; k < 6; k++) { const a = k / 6 * Math.PI * 2; grp.add(cy(0.04, 0.04, 0.25, lam(0x888888), Math.cos(a) * 0.95, 0.12, Math.sin(a) * 0.95, 5)); }
+      grp.position.set(o.x, 0, o.z);
+      break;
+    }
+    case 'trap': {
+      const ring = new THREE.Mesh(new THREE.TorusGeometry(0.9, 0.06, 8, 24), new THREE.MeshBasicMaterial({ color: 0xb050ff }));
+      ring.rotation.x = Math.PI / 2; ring.position.y = 0.05;
+      grp.add(ring, glowSprite(0xb050ff, 2.4, 0.35));
+      grp.children[1].position.y = 0.4;
+      grp.position.set(o.x, 0, o.z);
+      break;
+    }
     case 'door': {
       G.doorObj = o;
       const alongX = o.dx !== 0;

@@ -6,8 +6,9 @@ const config = require('./config');
 const state = require('./state');
 const { clients, joinedList, joinedCount, broadcast, sendPlayers, playerList, clearVirtuals, log } = require('./clients');
 const SS = require('./skinstealer');
+const ADM = require('./admin');
 const { updateMob, randomFloorFar, inWater } = require('./mobs');
-const { PUZZLES, removeObj, goalLines, sendGoals, enterCode, near, tickWater, patch, PICK_DIST } = require('./puzzles');
+const { PUZZLES, removeObj, goalLines, sendGoals, enterCode, near, tickWater, patch, alarm, PICK_DIST } = require('./puzzles');
 const { buildLevel, chasePackPos } = require('./level');
 
 const CATCH_DIST = 1.3;       // существо ловит на таком расстоянии (по горизонтали)
@@ -43,8 +44,8 @@ function placeAtSpawn(c) {
   }
 }
 
-function startLevel(idx) {
-  const seed = (Math.random() * 0x7fffffff) >>> 0;
+function startLevel(idx, forcedSeed) {
+  const seed = forcedSeed != null ? forcedSeed >>> 0 : (Math.random() * 0x7fffffff) >>> 0;
   if (idx === 0) state.TEAM.map = false;
   clearVirtuals();
   const G = state.G = buildLevel(idx, seed, state.TEAM, { forceMap: config.FORCE_MAP });
@@ -71,7 +72,7 @@ function initMsg(c) {
   return {
     t: 'init', id: c.id, level: G.idx, levels: LEVELS.length, seed: G.seed,
     objs: G.objs, goals: goalLines(G), held: G.pz.fuses.held, upgrades: { map: state.TEAM.map },
-    spawn: { x: c.x, y: c.y, z: c.z }, wl: G.map.wl, dead: deadIds(),
+    spawn: { x: c.x, y: c.y, z: c.z }, wl: G.map.wl, dead: deadIds(), world: ADM.worldMsg(), admin: !!c.admin,
     players: playerList(),
   };
 }
@@ -229,10 +230,27 @@ function throwNoise(G, c) {
   if (G.ss && G.ss.state === 'EXPOSED') G.ss.stunned = 3;
 }
 
+// Что админ-команды могут делать с игрой
+function addObjNet(G, kind, props) {
+  const o = Object.assign({ id: G.nextId++, kind }, props);
+  G.objs.push(o);
+  broadcast({ t: 'add', o });
+  return o;
+}
+const API = {
+  teleport: (G, p, pos, reason) => teleport(G, p, pos, reason),
+  revive: (G, p, pos, by) => revive(G, p, pos, by),
+  kill: (G, p, reason) => killPlayer(G, p, reason),
+  startLevel: (idx, seed) => startLevel(idx, seed),
+  alarm: (G, x, y, z) => alarm(G, x, y, z),
+  addObj: addObjNet,
+  catchBy: (G, victim, by) => { if (victim.god) return; killPlayer(G, victim, `Вас поймал(а) ${by.name}`); },
+};
+
 let lastTick = process.hrtime.bigint();
 function tick() {
   const now = process.hrtime.bigint();
-  const dt = Math.min(0.2, Number(now - lastTick) / 1e9);
+  const dt = Math.min(0.2, Number(now - lastTick) / 1e9) * ADM.WORLD.timescale; // хост может замедлить/ускорить время
   lastTick = now;
   const G = state.G;
   const players = joinedList();
@@ -248,15 +266,24 @@ function tick() {
 
   tickWater(G, dt);
   const active = players.filter((p) => !p.caged && !p.dead); // в клетке и мёртвые — не участвуют
-  for (const m of G.mobs) updateMob(G, m, dt, active);
+  const W = ADM.WORLD;
+  G.mobMul = W.mobspeed;
+  // кого существа видят: не невидимых и не «одержимых»; при дружелюбных существах — никого
+  const hunted = W.friendly ? [] : active.filter((p) => !(p.mods && (p.mods.invis || p.mods.possessed)));
+  if (!W.aioff) {
+    for (const m of G.mobs) updateMob(G, m, dt, hunted);
+    if (G.ss) SS.tickStealer(G, dt, players.filter((p) => p.caged || hunted.includes(p)));
+  }
   SS.tickPings(G, dt, players);
-  if (G.ss) { SS.tickStealer(G, dt, players); SS.detectorBeeps(G, players, dt); cageViews(G, dt, players); }
+  if (G.ss) { SS.detectorBeeps(G, players, dt); cageViews(G, dt, players); }
+  ADM.tickAdmin(G, dt, active, API);
 
   let goalsChanged = false;
   for (const p of active) {
     if (p.invuln > 0) p.invuln -= dt;
     if (touchObjects(G, p)) goalsChanged = true;
-    const m0 = G.mobs.find((m) => m.stun <= 0 && !m.hidden && p.invuln <= 0 && Math.hypot(m.x - p.x, m.z - p.z) < CATCH_DIST &&
+    if (!hunted.includes(p) || W.aioff) continue;
+    const m0 = G.mobs.find((m) => m.stun <= 0 && !m.hidden && p.invuln <= 0 && Math.hypot(m.x - p.x, m.z - p.z) < CATCH_DIST * (m.boss ? 1.6 : 1) &&
       (m.type === 'drowner' ? inWater(G, p) && Math.abs(m.y - p.y) < 3 : Math.abs(m.y - p.y) < CATCH_DY));
     if (m0) catchPlayer(G, p, m0);
   }
@@ -292,7 +319,7 @@ function tick() {
   const mask = G.ss && SS.maskEntry(G, f);
   if (mask) ps.push(mask);
   ps.sort((a, b) => a[0] - b[0]);
-  const ms = G.mobs.map((m) => [f(m.x), f(m.y), f(m.z), f(m.r), m.mode === 'chase' ? 1 : 0, m.stun > 0 || m.hidden ? 1 : 0, MOB_TYPES.indexOf(m.type)]);
+  const ms = G.mobs.map((m) => [f(m.x), f(m.y), f(m.z), f(m.r), m.mode === 'chase' ? 1 : 0, m.stun > 0 || m.hidden ? 1 : 0, MOB_TYPES.indexOf(m.type), m.boss ? 2 : 1]);
   const monster = G.ss && SS.monsterEntry(G, f, MOB_TYPES.indexOf('skinstealer'));
   if (monster) ms.push(monster);
   broadcast({ t: 's', p: ps, m: ms });
@@ -300,6 +327,9 @@ function tick() {
 
 function onJoin(c, msg) {
   c.name = String(msg.name || 'Игрок').replace(/[<>&]/g, '').trim().slice(0, 16) || 'Игрок';
+  if (ADM.isBanned(c)) { c.send({ t: 'kicked', text: 'Вы забанены хостом' }); setTimeout(() => c.conn.socket.destroy(), 200); return; }
+  c.mods = ADM.defMods();
+  if (msg.token) ADM.auth(c, msg.token); // хост может войти сразу с токеном из ссылки
   c.joined = true;
   resetPlayer(c);
   placeAtSpawn(c);
@@ -324,6 +354,7 @@ function onMessage(c, msg) {
   const G = state.G;
   if (!c.joined || G.state !== 'play') return;
 
+  if (msg.t === 'chat' && typeof msg.text === 'string' && msg.text.trim().startsWith('/')) { ADM.onAdmin(state.G, c, { line: msg.text }, API); return; } // команды хоста
   if (msg.t === 'chat') {
     const now = Date.now() / 1000;
     if (now - (c.chatT || 0) < CHAT_GAP) return;
@@ -333,6 +364,8 @@ function onMessage(c, msg) {
     return;
   }
   if (msg.t === 'rtt') { if (msg.k === c.rttK) c.rtt = Date.now() - c.rttK; return; }
+  if (msg.t === 'auth') { ADM.auth(c, msg.token); return; }
+  if (msg.t === 'adm') { ADM.onAdmin(G, c, msg, API); return; }
   if (c.dead) { // призрак: смотрит за живыми, ставит метки, больше ничего
     if (msg.t === 'watch') c.watch = +msg.id;
     else if (msg.t === 'mark') {
@@ -346,6 +379,7 @@ function onMessage(c, msg) {
   }
   if (msg.t === 'p' && c.caged) { const r = +msg.r; if (Number.isFinite(r)) c.r = r; return; } // в клетке — только смотреть
   if (c.caged) return;
+  if (msg.t === 'p' && c.mods && c.mods.frozen) { const r = +msg.r; if (Number.isFinite(r)) c.r = r; return; } // заморожен хостом
   if (msg.t === 'p') {
     const x = +msg.x, y = +msg.y, z = +msg.z, r = +msg.r;
     if ([x, y, z, r].every(Number.isFinite)) {

@@ -22,19 +22,20 @@ const OBJ_DOT = { water: '#7fe8ff', fuse: '#ffb030', box: '#ffffff', keypad: '#f
 
 
 export function toggleBigMap() {
-  if (!UP.map && !spec.dead) { toast('У вас нет улучшенной карты. Она может лежать где-то на 1 уровне.', 3200); return; }
+  if (!UP.map && !spec.dead && !S.admin) { toast('У вас нет улучшенной карты. Она может лежать где-то на 1 уровне.', 3200); return; }
   S.bigOn ? closeBigMap() : openBigMap();
-  // призраку нужен курсор, чтобы ставить метки кликом
-  if (spec.dead && S.bigOn) { S.ghostCursor = true; document.exitPointerLock(); }
+  // призраку (и хосту для телепорта) нужен курсор, чтобы кликать по карте
+  if ((spec.dead || S.adminClick) && S.bigOn) { S.ghostCursor = true; document.exitPointerLock(); }
 }
 // Клик по карте призраком — метка-подсказка для живых
 bigc.addEventListener('click', (e) => {
-  if (!spec.dead || !S.bigOn || !map) return;
+  if ((!spec.dead && !S.adminClick) || !S.bigOn || !map) return;
   const rect = bigc.getBoundingClientRect();
   const cell = bigc.width / N;
   const x = (e.clientX - rect.left) / rect.width * bigc.width / cell * TILE, z = (e.clientY - rect.top) / rect.height * bigc.height / cell * TILE;
   const f = myFloor();
-  sendNet({ t: 'mark', x, y: f * map.FH, z });
+  if (S.adminClick) { sendNet({ t: 'adm', cmd: 'tpxy', args: { x, z, f } }); S.adminClick = false; }
+  else sendNet({ t: 'mark', x, y: f * map.FH, z });
   closeBigMap();
   S.ghostCursor = false;
   renderer.domElement.requestPointerLock();

@@ -168,7 +168,7 @@ function canSee(G, m, p) {
 function updateMob(G, m, dt, players) {
   if (m.type === 'drowner') { updateDrowner(G, m, dt, players); return; }
   if (m.stun > 0) { m.stun -= dt; return; }
-  const speed = BASE_SPEED * G.cfg.mobSpeed;
+  const speed = BASE_SPEED * G.cfg.mobSpeed * (G.mobMul || 1) * (m.boss ? 1.5 : 1);
   let best = null, bd = 1e9;
   for (const p of players) {
     if (p.node < 0) continue;

@@ -53,8 +53,11 @@ async function main() {
       pos = { x: cg.x + 1.5, y: cg.y, z: cg.z };
       await sleep(400);
       send({ t: 'use', id: cg.id });
-      await sleep(700);
-      if (await g.ev(`getComputedStyle(document.getElementById('cagedBox')).display === 'none'`)) { freed = true; break; }
+      const reply = await waitBot((m) => m.t === 'ev' && (m.text.includes('пуста') || m.text.includes('освободил')), 4000).catch(() => null);
+      if (reply && reply.text.includes('освободил')) {
+        for (let k = 0; k < 30 && !freed; k++) { await sleep(150); freed = await g.ev(`getComputedStyle(document.getElementById('cagedBox')).display === 'none'`); }
+        break;
+      }
     }
     assert(freed, 'игрока не освободили');
     await waitBot((m) => m.t === 'exposed');

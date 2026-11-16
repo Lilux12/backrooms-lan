@@ -330,4 +330,4 @@ function enterCode(G, c, value) {
   }
 }
 
-module.exports = { PUZZLES, patch, removeObj, goalLines, sendGoals, checkSolved, enterCode, near, tickWater, setCellNet, animateWater, PICK_DIST };
+module.exports = { alarm, PUZZLES, patch, removeObj, goalLines, sendGoals, checkSolved, enterCode, near, tickWater, setCellNet, animateWater, PICK_DIST };

@@ -2,7 +2,7 @@
 import { $, LEVELS } from '../core/util.js';
 import { FL, S, UP, keypad, me } from '../core/state.js';
 import { scene } from '../render/scene.js';
-import { buildWorld, curLevel, objs, removeObj, setCellLocal, setWater } from '../world/world.js';
+import { addObj, buildWorld, curLevel, objs, removeObj, setCellLocal, setWater } from '../world/world.js';
 import { refreshObj } from '../world/objects.js';
 import { remotes, setPlayers } from '../entities/avatars.js';
 import { ensureMob, ensureMobs, mobEnts } from '../entities/mobs.js';
@@ -12,6 +12,8 @@ import { beginPlay } from '../ui/menu.js';
 import { placeMe } from '../game/player.js';
 import { onSocialNet, social } from '../game/social.js';
 import { onSpectatorNet, spec } from '../game/spectator.js';
+import { applyWorld, onWorldNet } from '../game/worldfx.js';
+import { adminToken, onAdminNet, setAdminPlayers } from '../ui/admin.js';
 import { closeBigMap } from '../ui/maps.js';
 
 /* ============================== Сеть ============================== */
@@ -23,7 +25,7 @@ export function connect(name) {
     return;
   }
   ws = new WebSocket(`ws://${location.host}`);
-  ws.onopen = () => ws.send(JSON.stringify({ t: 'join', name }));
+  ws.onopen = () => ws.send(JSON.stringify({ t: 'join', name, token: adminToken() || undefined }));
   ws.onmessage = (e) => onNet(JSON.parse(e.data));
   ws.onclose = () => {
     S.joined = false;
@@ -37,7 +39,7 @@ export const sendNet = (o) => { if (ws && ws.readyState === 1) ws.send(JSON.stri
 
 
 function onNet(m) {
-  if (onSocialNet(m) || onSpectatorNet(m)) return;
+  if (onSocialNet(m) || onSpectatorNet(m) || onWorldNet(m) || onAdminNet(m)) return;
   switch (m.t) {
     case 'init': {
       S.myId = m.id;
@@ -52,17 +54,19 @@ function onNet(m) {
       placeMe(m.spawn.x, m.spawn.y, m.spawn.z); me.yaw = Math.PI * 0.5; me.pitch = 0;
       social.caged = 0; $('cagedBox').style.display = 'none';
       spec.dead = false; spec.free = false; spec.watch = null; spec.deadIds = new Set(m.dead || []);
+      if (m.world) applyWorld(m.world);
+      S.admin = !!m.admin;
       me.stamina = 1; me.exhausted = false;
       S.goalLines = m.goals; S.heldFuses = m.held;
       closeKeypad(); $('note').style.display = 'none';
-      setPlayers(m.players);
+      setPlayers(m.players); setAdminPlayers(m.players);
       hideBanner(); renderGoals();
       showLevelTitle(m.level);
       S.joined = true;
       if (!S.started) beginPlay();
       break;
     }
-    case 'players': setPlayers(m.list); break;
+    case 'players': setPlayers(m.list); setAdminPlayers(m.list); break;
     case 's': {
       for (const [id, x, y, z, r, fl, cr, pi] of m.p) {
         const rem = remotes.get(id);
@@ -73,8 +77,9 @@ function onNet(m) {
       }
       // кого нет в снапшоте (например, сидит в клетке) — не рисуем
       for (const rem of remotes.values()) if (rem.seen && performance.now() - (rem.snapT || 0) > 400) { rem.seen = false; rem.mesh.visible = false; }
-      m.m.forEach(([x, y, z, r, chase, stun, type], i) => {
+      m.m.forEach(([x, y, z, r, chase, stun, type, scale], i) => {
         const mo = ensureMob(i, MOB_TYPES[type] || 'stalker');
+        mo.scale = scale || 1;
         mo.tx = x; mo.ty = y; mo.tz = z; mo.tr = r; mo.chase = !!chase; mo.stun = !!stun;
         if (!mo.seen) { mo.x = x; mo.y = y; mo.z = z; mo.r = r; mo.seen = true; mo.group.visible = true; }
       });
@@ -97,6 +102,7 @@ function onNet(m) {
       break;
     }
     case 'upgrade':
+      if (m.what === 'nomap') { UP.map = false; closeBigMap(); break; }
       UP.map = true; sfx.win();
       toast(`${m.by} нашёл УЛУЧШЕННУЮ КАРТУ! M — карта на весь экран, существа видны на ней`, 6000);
       break;
@@ -131,6 +137,7 @@ function onNet(m) {
       break;
     case 'ev': toast(m.text, 3000); break;
     case 'water': setWater(m.wl); break;
+    case 'add': addObj(m.o); break;
     case 'cageview': {
       const rec = objs.get(m.id);
       if (rec && rec.parts.setPrisoner) rec.parts.setPrisoner(m.name);

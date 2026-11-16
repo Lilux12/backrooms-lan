@@ -79,6 +79,9 @@ export const sfx = {
   detector: () => tone(1800, 0.05, 0.12, 'square'),
   shriek: () => { tone(900, 1.2, 0.35, 'sawtooth', 2400); tone(1300, 1.0, 0.25, 'square', 600, 0.05); noiseBurst(3000, 1.2, 0.5, 'highpass'); },
   noise: () => { for (let i = 0; i < 8; i++) tone(rand(600, 1400), 0.12, 0.15, 'square', null, i * 0.15); },
+  boom: (v = 1) => { noiseBurst(180, 1.6, 0.8 * v); tone(60, 1.2, 0.6 * v, 'sine', 25); noiseBurst(1200, 0.4, 0.4 * v, 'bandpass'); },
+  boing: () => tone(180, 0.35, 0.3, 'sine', 620),
+  revive: () => [392, 523, 659, 784, 1047].forEach((f, i) => tone(f, 0.6, 0.18, 'sine', null, i * 0.09)),
   bubble: () => { const f = rand(300, 700); tone(f, 0.08, 0.08, 'sine', f * 1.8); },
 };
 

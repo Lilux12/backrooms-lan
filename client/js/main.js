@@ -17,6 +17,7 @@ import { placeMe, updateBattery, updateCamera, updateMovement } from './game/pla
 import './game/input.js';
 import { fadeChat, tickExpose } from './game/social.js';
 import { tickMarks, updateSpectator } from './game/spectator.js';
+import { W } from './game/worldfx.js';
 
 let last = performance.now();
 
@@ -28,6 +29,7 @@ window.__br = {
 };
 
 function update(dt) {
+  dt *= W.timescale; // хост может замедлить/ускорить время
   S.time += dt;
   let moving = false, sprint = false;
   if (!updateSpectator(dt)) ({ moving, sprint } = updateMovement(dt), updateCamera(dt, moving, sprint));
