@@ -120,6 +120,8 @@ function teleport(G, p, pos, reason) {
 }
 
 PZ.hooks.teleport = (G, p, pos, reason) => teleport(G, p, pos, reason);
+PZ.hooks.kill = (G, p, reason, pub) => killPlayer(G, p, reason, pub);
+PZ.hooks.finish = (G, ending) => finishLevel(G, ending);
 
 // Существо поймало игрока: телепорт (или рестарт забега на уровне-погоне)
 function catchPlayer(G, p, m0) {
