@@ -3,7 +3,8 @@ import { clamp } from './core/util.js';
 import { FL, S, UP, keys, me } from './core/state.js';
 import { camera, renderer, scene, updateDust } from './render/scene.js';
 import { updateLight } from './render/lighting.js';
-import { H, fx, map } from './world/world.js';
+import * as THREE from 'three';
+import { H, fx, map, objs, plates } from './world/world.js';
 import { animateWater } from './world/geometry.js';
 import { animateObjects } from './world/objects.js';
 import { remotes, updateRemotes } from './entities/avatars.js';
@@ -20,6 +21,7 @@ import { tickMarks, updateSpectator } from './game/spectator.js';
 import { W } from './game/worldfx.js';
 
 let last = performance.now();
+const _fwd = new THREE.Vector3();
 
 // доступ для отладки и тестов: состояние, карта, телепорт камеры
 window.__br = {
@@ -38,6 +40,12 @@ function update(dt) {
   animateObjects(dt);
   animateWater(dt);
   if (fx) fx.update(dt);
+  if (plates) { // таблички номеров отеля меняются за спиной
+    camera.getWorldDirection(_fwd);
+    const keys = new Set();
+    for (const rec of objs.values()) if (rec.o.kind === 'key') keys.add(Math.floor(rec.o.y / map.FH + 0.01) + ':' + (Math.floor(rec.o.x / 4) + Math.floor(rec.o.z / 4) * 45));
+    plates.update(dt, camera.position, _fwd, keys);
+  }
   updateBattery(dt);
   updateDust(dt, H);
   updateLight(dt);

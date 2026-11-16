@@ -2,7 +2,7 @@
 // стены, плиты пола и потолка, края провалов, лестницы, бассейны, вода, лазы, вертикальные лестницы, лампы.
 import * as THREE from 'three';
 import { BR, N, TILE } from '../core/util.js';
-import { buildBlocks, rampGeo } from './blocks.js';
+import { buildBlocks, escalatorParts, rampGeo } from './blocks.js';
 
 const { T, NN, SLAB, VENT_H, LOW_H } = BR;
 const m4 = new THREE.Matrix4(), q = new THREE.Quaternion(), v = new THREE.Vector3(), sc = new THREE.Vector3();
@@ -211,7 +211,8 @@ export function buildLevelGeometry(map, mats, st, seed, panelMat) {
   add(instanced(face, wallMat, edges));
   add(instanced(face.clone(), floorMat, poolSides));
   add(instanced(new THREE.BoxGeometry(TILE, FH, TILE), wallMat, fills));
-  add(instanced(st.ramp ? rampGeo(FH) : stairGeo(FH), floorMat, stairs));
+  if (st.escalator) { for (const [g, m] of escalatorParts(FH)) add(instanced(g, m, stairs)); }
+  else add(instanced(st.ramp ? rampGeo(FH) : stairGeo(FH), floorMat, stairs));
   for (const mesh of buildBlocks(blocks)) group.add(mesh);
   add(instanced(ladderGeo(FH + 1.1), new THREE.MeshLambertMaterial({ color: 0x8a8f94 }), ladders));
   // стеклянная крыша: мутное небо в переплёте рам

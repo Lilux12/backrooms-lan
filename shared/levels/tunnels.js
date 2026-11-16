@@ -74,7 +74,7 @@
   // Шаги для проверки проходимости
   function states(map) {
     return [
-      { name: 'старт', apply() {}, need: ['steamvalve', 'switch:plates'] },
+      { name: 'старт', apply() {}, need: ['steamvalve', 'switch:plates'], noExit: true },
       { name: 'шлюз открыт', apply() { BR.setCell(map, 0, GATE, T.FLOOR); }, need: ['switch:gate'], exit: true },
     ];
   }

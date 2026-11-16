@@ -94,6 +94,8 @@ function verifyLevel(lv, BRB) {
         }
         for (const k of st.need) assert(G.objs.some((o) => o.kind === k || `${o.kind}:${o.group}` === k), `${tag}, шаг «${st.name}»: нет объекта ${k}`);
         if (st.exit) assert(r[G.map.exit.frontNode] >= 0, `${tag}: выход недостижим`);
+        // головоломку нельзя обойти: на этом шаге до двери выхода (даже открытой) добраться нельзя
+        if (st.noExit) assert(r[G.map.exit.frontNode] < 0, `${tag}, шаг «${st.name}»: выход достижим в обход головоломки`);
       }
     } else {
       BR.setDoor(G.map, true);

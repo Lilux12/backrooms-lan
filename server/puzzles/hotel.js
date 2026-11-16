@@ -78,12 +78,6 @@ module.exports = {
     },
     use(G, c, o) {
       const pz = G.pz.hotel;
-      if (o.kind === 'phone') {
-        const lines = G.cfg.phone || ['…'];
-        c.send({ t: 'note', title: 'Телефон', text: lines[(G.phoneK = ((G.phoneK || 0) + 1)) % lines.length], radio: true });
-        broadcast({ t: 'sfx', name: 'radio', x: o.x, y: o.y, z: o.z });
-        return true;
-      }
       if (o.kind !== 'keyslot') return false;
       if (!pz.keys) { c.send({ t: 'ev', text: pz.inserted >= 4 ? 'Все ключи на месте.' : `В ключнице ${pz.inserted}/4 ключей. Найдите номера по книге регистрации.` }); return true; }
       pz.inserted += pz.keys; pz.keys = 0;

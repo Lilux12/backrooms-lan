@@ -9,7 +9,8 @@ const { findChrome, launchChrome, openGame, sleep } = require('./lib/browser');
 
 const PORT = 3904;
 const OUT = process.env.SHOT_DIR || path.join(os.tmpdir(), 'backrooms-shots');
-const LEVELS = process.env.LEVEL ? [+process.env.LEVEL] : [0, 1, 2, 3, 5];
+const LEVELS = process.env.LEVEL ? process.env.LEVEL.split(',').map(Number) : require('../shared/map.js').LEVELS.map((_, i) => i);
+const KINDS = (process.env.KINDS || 'stair,hole,pool,ladder,vent,atrium,block,landmark').split(',');
 
 // В браузере: найти клетку нужного типа и встать в соседнюю клетку, глядя на неё
 const FIND = `(kind) => {
@@ -31,6 +32,37 @@ const FIND = `(kind) => {
     window.__br.tp(16.5 * 4, 2 * m.FH, 20 * 4, -Math.PI / 2 - 0.3, -0.45);
     return 2;
   }
+  if (kind === 'block') { // низкое препятствие (машина, стол, кровать) — с трёх клеток
+    for (let f = 0; f < m.F; f++) for (let i = 0; i < BR.NN; i++) {
+      if (m.t[f][i] !== T.BLOCK) continue;
+      for (const [dx, dz] of BR.D4) {
+        const j1 = i + dx + dz * N, j2 = i + 2 * (dx + dz * N);
+        if (m.t[f][j1] !== T.FLOOR || m.t[f][j2] !== T.FLOOR) continue;
+        const x = BR.centerX(j2) + dx, z = BR.centerZ(j2) + dz;
+        window.__br.tp(x, f * m.FH, z, Math.atan2(dx, dz), -0.25);
+        return f;
+      }
+    }
+  }
+  if (kind === 'landmark') { // знаковое место уровня (по данным генератора)
+    const order = ['hall', 'cinema', 'chandelier', 'upside', 'boiler', 'shaft', 'booth', 'surgery', 'morgue', 'glassroom', 'serverroom', 'roofgen', 'endless', 'fountain'];
+    for (const k of order) {
+      const e = m.fx.find((q) => q.k === k);
+      if (!e) continue;
+      const f = e.f || 0;
+      let x = e.x, z = e.z;
+      if (e.x0 != null) { x = (e.x0 + e.x1 + 1) / 2 * 4; z = ((e.z0 != null ? (e.z0 + e.z1 + 1) / 2 : e.z + 0.5)) * 4; }
+      // ищем свободную точку в 6–10 м, откуда место видно
+      for (let a = 0; a < 32; a++) {
+        const ang = a / 32 * Math.PI * 2, d = 7 + (a % 3);
+        const px = x + Math.cos(ang) * d, pz = z + Math.sin(ang) * d, y = f * m.FH;
+        if (BR.blocked(m, px, y, pz, 0.35, 1.7, 0.5)) continue;
+        if (!BR.los3(m, px, y + 1.6, pz, x, y + 1.6, z)) continue;
+        window.__br.tp(px, y, pz, Math.atan2(-(x - px), -(z - pz)), k === 'chandelier' ? 0.35 : -0.1);
+        return f;
+      }
+    }
+  }
   return -1;
 }`;
 
@@ -44,8 +76,8 @@ async function main() {
       const srv = await startServer(PORT, { START_LEVEL: String(lv) });
       try {
         const g = await openGame(br.port, `http://localhost:${PORT}/`);
-        await g.ev(`document.getElementById('lvl').classList.remove('on')`);
-        for (const kind of ['stair', 'hole', 'pool', 'ladder', 'vent', 'atrium']) {
+        await g.ev(`document.getElementById('lvl').classList.remove('on'); document.getElementById('hud').style.visibility = 'hidden'`);
+        for (const kind of KINDS) {
           const f = await g.ev(`(${FIND})('${kind}')`);
           if (f < 0) continue;
           await sleep(1500);

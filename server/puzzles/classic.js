@@ -87,8 +87,18 @@ module.exports = {
       const digits = [];
       for (let i = 0; i < 4; i++) digits.push(1 + Math.floor(rnd() * 9));
       G.pz.code.digits = digits;
-      let spots;
-      if (cfg.codeFloors) {
+      if (cfg.codeTapes) {
+        // код на двух кассетах камер наблюдения: на каждой видно по две цифры
+        const tapes = (map.lv && map.lv.tapes) || BR.pickSpots(map, rnd, 2, { minDist: 0.2 * maxD, minSep: 8 }).map((p) => p.node);
+        tapes.slice(0, 2).forEach((n, k) => {
+          const p = U.at(G, n), a = digits[k * 2], b = digits[k * 2 + 1];
+          const shown = k === 0 ? `${a} ${b} _ _` : `_ _ ${a} ${b}`;
+          add('paper', { x: p.x, y: p.y, z: p.z, tape: k, title: `Кассета камеры №${k + 3}`,
+            text: `На записи охранник подходит к решётке кинотеатра и набирает код. Видно только часть кнопок:\n\n${shown}\n\n(${k === 0 ? 'первые две цифры' : 'последние две цифры'})` });
+        });
+      }
+      let spots = [];
+      if (cfg.codeTapes) { /* цифр на стенах нет */ } else if (cfg.codeFloors) {
         spots = cfg.codeFloors.map((f, i) => {
           const s = BR.pickWallSpots(map, rnd, 4, { minDist: 0.15 * maxD, minSep: 6 })
             .concat(BR.pickWallSpots(map, rnd, 30, { minDist: 0.1 * maxD }));
@@ -109,8 +119,18 @@ module.exports = {
       const c = G.pz.code;
       let s = 'Код: ' + c.found.map((d) => (d == null ? '_' : d)).join(' ') + (c.solved ? ' ✔' : '');
       if (!c.solved && G.cfg.uvDigits) s += ' · цифры видно только в свете фонаря';
+      if (!c.solved && G.cfg.codeTapes) s += ' · цифры — на кассетах камер';
       if (!c.solved && G.cfg.codePower) s += ' · терминалу нужен генератор';
       return s;
+    },
+    // прочитали кассету — её цифры найдены
+    read(G, c, o) {
+      if (o.tape == null) return;
+      const f = G.pz.code.found, d = G.pz.code.digits, k = o.tape * 2;
+      if (f[k] != null) return;
+      f[k] = d[k]; f[k + 1] = d[k + 1];
+      broadcast({ t: 'ev', text: `${c.name} посмотрел кассету: цифры ${d[k]} и ${d[k + 1]} (позиции ${k + 1}–${k + 2})` });
+      sendGoals(G);
     },
     touch(G, p, o) {
       if (o.kind !== 'digit' || G.pz.code.found[o.idx] != null) return false;

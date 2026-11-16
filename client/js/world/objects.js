@@ -185,7 +185,7 @@ export function createObj(o) {
     }
     case 'paper': case 'lore': {
       // записка/кассета: на стене (если есть нормаль) или на подставке
-      const isTape = o.kind === 'lore' && /плёнк|касс/i.test(o.title || '');
+      const isTape = (o.kind === 'lore' || o.tape != null) && /плёнк|касс/i.test(o.title || '');
       const m = textPlane((g) => {
         g.save(); g.translate(128, 128); g.rotate(0.04);
         if (isTape) {
@@ -320,6 +320,11 @@ export function createObj(o) {
         grp.add(arm); rec.parts.arm = arm;
         grp.add(bx(0.12, 1.3, 0.12, lam(0x30343a), 0, 0.65, 0));
         lampM = bx(0.15, 0.1, 0.05, lampMat, 0, 1.85, 0.16);
+      } else if (st === 'pump') {
+        grp.add(bx(0.6, 0.9, 0.5, lam(0x8a2a1a, 0x100302), 0, 0.45, 0), cy(0.06, 0.06, 0.9, lam(0x9aa0a4), 0, 1.3, 0, 8));
+        const arm = new THREE.Group(); arm.position.set(0, 1.7, 0); arm.add(bx(0.8, 0.07, 0.07, lam(0x222222), 0.3, 0, 0)); grp.add(arm);
+        rec.parts.arm = arm;
+        lampM = bx(0.12, 0.12, 0.05, lampMat, 0, 0.75, 0.26);
       } else if (st === 'desk') {
         grp.add(bx(2.2, 1.05, 0.7, lam(0x6b5a44), 0, 0.52, 0), bx(2.3, 0.06, 0.8, lam(0x2b2b2b), 0, 1.08, 0));
         lampM = cy(0.1, 0.12, 0.08, lampMat, 0.6, 1.16, 0.1, 12);
@@ -380,6 +385,51 @@ export function createObj(o) {
       grp.position.set(o.x, 0, o.z);
       break;
     }
+    case 'key': {
+      const brass = lam(0xd8b040, 0x302008);
+      const ring = new THREE.Mesh(new THREE.TorusGeometry(0.08, 0.02, 6, 14), brass);
+      grp.add(ring, bx(0.03, 0.22, 0.02, brass, 0, -0.18, 0), bx(0.07, 0.03, 0.02, brass, 0.035, -0.26, 0),
+        bx(0.18, 0.1, 0.01, lam(0xe8e0c8), 0.1, 0.05, 0), glowSprite(0xffd060, 1.2, 0.45));
+      grp.position.set(o.x, 1.0, o.z); rec.bob = true;
+      break;
+    }
+    case 'keyslot': {
+      const wood = lam(0x5a3a20);
+      grp.add(bx(1.2, 0.9, 0.12, wood, 0, 1.5, 0), bx(1.3, 1.1, 0.06, lam(0x3a2412), 0, 1.5, -0.06));
+      for (let k = 0; k < 4; k++) {
+        const hook = bx(0.04, 0.12, 0.08, lam(0xc0a050), -0.42 + k * 0.28, 1.65, 0.08); grp.add(hook);
+        const tag = bx(0.12, 0.18, 0.02, lam(0xe8e0c8), -0.42 + k * 0.28, 1.45, 0.09); grp.add(tag);
+      }
+      grp.add(cy(0.08, 0.1, 1.0, lam(0x30343a), 0, 0.5, 0, 8));
+      grp.position.set(o.x, 0, o.z);
+      break;
+    }
+    case 'phone': {
+      grp.add(bx(0.5, 0.75, 0.5, lam(0x3a2414), 0, 0.37, 0), bx(0.28, 0.1, 0.22, lam(0x101010), 0, 0.8, 0),
+        cy(0.08, 0.08, 0.03, lam(0xd8d0c0), 0, 0.86, 0, 12), bx(0.3, 0.06, 0.07, lam(0x101010), 0, 0.9, -0.06));
+      rec.parts.glow = glowSprite(0xffe0a0, 0.9, 0); rec.parts.glow.position.y = 1.1; grp.add(rec.parts.glow);
+      grp.position.set(o.x, 0, o.z); rec.ring = true;
+      break;
+    }
+    case 'fuelcan': {
+      grp.add(bx(0.32, 0.42, 0.16, lam(0xc02018, 0x200402), 0, 0, 0), bx(0.08, 0.1, 0.06, lam(0x222222), 0.1, 0.25, 0), bx(0.2, 0.04, 0.04, lam(0x222222), -0.04, 0.24, 0),
+        glowSprite(0xff6040, 1.3, 0.45));
+      grp.position.set(o.x, 1.0, o.z); rec.bob = true;
+      break;
+    }
+    case 'mallfuse': {
+      grp.add(cy(0.08, 0.08, 0.36, lam(0xe0e0d8, 0x202020), 0, 0, 0, 10), cy(0.1, 0.1, 0.06, lam(0xd0a040), 0, 0.2, 0, 10), cy(0.1, 0.1, 0.06, lam(0xd0a040), 0, -0.2, 0, 10), glowSprite(0xffa030, 1.5, 0.55));
+      grp.rotation.z = Math.PI / 2; grp.position.set(o.x, 0.9, o.z); rec.bob = true;
+      break;
+    }
+    case 'genroof': {
+      grp.add(bx(2.2, 1.2, 1.2, lam(0x3a5a3a, 0x060a06), 0, 0.6, 0), bx(2.0, 0.2, 1.0, lam(0x202420), 0, 1.3, 0),
+        cy(0.09, 0.09, 1.6, lam(0x333333), 0.8, 1.9, 0.3, 8), bx(0.5, 0.5, 0.05, lam(0x1a1a1a), -0.6, 0.8, 0.61), bx(0.15, 0.25, 0.1, lam(0xc02020), -0.6, 0.8, 0.66));
+      const lampG = bx(0.14, 0.14, 0.05, new THREE.MeshBasicMaterial({ color: 0x661010 }), 0.2, 1.0, 0.61); grp.add(lampG);
+      grp.position.set(o.x, 0, o.z);
+      rec.parts.lampG = lampG;
+      break;
+    }
     case 'door': {
       G.doorObj = o;
       const alongX = o.dx !== 0;
@@ -434,7 +484,8 @@ export function refreshObj(rec) {
     rec.glow.material.color.setHex(o.on ? 0x40ff70 : 0xff3020);
     rec.glow.material.opacity = o.on ? 0.6 : 0.3;
     if (p.top) { p.top.material.color.setHex(o.on ? 0x30d060 : 0x884422); p.top.position.y = o.pressed ? 0.04 : 0.08; }
-    if (p.arm) p.arm.rotation.x = o.on ? -0.8 : 0.8;
+    if (p.arm && o.style === 'pump') p.arm.rotation.z = o.on ? -0.4 : 0.3;
+    else if (p.arm) p.arm.rotation.x = o.on ? -0.8 : 0.8;
   } else if (o.kind === 'steamvalve') {
     p.lampV.material.color.setHex(o.on ? 0x30ff60 : 0x661010);
   } else if (o.kind === 'altar') {
@@ -469,6 +520,8 @@ export function animateObjects(dt) {
     }
     if (o.kind === 'switch' && o.on && rec.parts.vib) rec.group.position.x = o.x + Math.sin(S.time * 60) * 0.01;
     if (o.kind === 'steamvalve' && o.on) rec.parts.wheel.rotation.z += dt * 0.6;
+    if (o.kind === 'switch' && o.style === 'pump' && o.on) rec.parts.arm.rotation.z = Math.sin(S.time * 6) * 0.35;
+    if (rec.ring) rec.parts.glow.material.opacity = Math.sin(S.time * 1.3 + o.x) > 0.93 ? 0.6 : 0;
     if (o.kind === 'altar' && !o.used) rec.parts.flame.scale.setScalar(2.2 + Math.sin(S.time * 9) * 0.15);
     if (rec.bob) { rec.group.position.y = rec.baseY + (rec.o.kind === 'fuse' ? 0.9 : 1.0) + Math.sin(S.time * 2 + rec.o.x) * 0.1; rec.group.rotation.y += dt * 1.2; }
     if (rec.o.kind === 'keypad' && !S.goalLines.some((l) => l.startsWith('Код') && l.includes('✔'))) rec.parts.screen.visible = Math.sin(S.time * 4) > -0.3;

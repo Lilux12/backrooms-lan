@@ -42,6 +42,7 @@ export function updateLight(dt) {
   let k = flick.k * (0.97 + 0.03 * Math.sin(S.time * 90)) * lightMul(); // хост может менять свет
   if (LIGHT.pulse) k *= 0.78 + 0.22 * Math.sin(S.time * 3.2);
   if (performance.now() / 1000 < (S.blackoutUntil || 0)) k *= 0.04; // перегрузка: свет погас
+  if (curStyle && curStyle.unpowered && !S.powered) k *= 0.22;       // здание обесточено, пока не запустят генератор
   const alarm = performance.now() / 1000 < S.alarmUntil;
   if (alarm) k *= 0.6 + 0.4 * Math.abs(Math.sin(S.time * 6));
   FL.k += ((FL.on ? 1 : 0) - FL.k) * Math.min(1, dt * 14);

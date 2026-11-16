@@ -72,6 +72,10 @@ function buildProp(kind) {
     case 'wetsign': { const a = bx(0.4, 0.55, 0.02, pm('wet', 0xe8c82a), 0, 0.3, 0.12); a.rotation.x = -0.22; const b = a.clone(); b.rotation.x = 0.22; b.position.z = -0.12; g.add(a, b); break; }
     case 'bin': { g.add(cy(0.24, 0.2, 0.62, pm('bin', 0x4b5256), 0, 0.31, 0, 12), bx(0.2, 0.02, 0.15, pm('paper', 0xe8e4d0), 0.04, 0.63, 0.02)); break; }
     case 'biobox': { g.add(bx(0.5, 0.6, 0.4, pm('bio', 0xb02a22), 0, 0.3, 0), bx(0.52, 0.06, 0.42, pm('biolid', 0x701510), 0, 0.62, 0), bx(0.18, 0.18, 0.01, pm('biosign', 0xf2d12a), 0, 0.36, 0.205)); break; }
+    case 'luggage': { g.add(bx(0.5, 0.65, 0.25, pm('lug', 0x5a3a24), 0, 0.33, 0), bx(0.2, 0.04, 0.04, pm('lugh', 0x222222), 0, 0.7, 0)); break; }
+    case 'vase': { g.add(cy(0.12, 0.2, 0.7, pm('vase', 0x2a4a6a), 0, 0.35, 0, 12), cy(0.05, 0.05, 0.4, pm('stem', 0x3a5a2a), 0, 0.9, 0, 5)); break; }
+    case 'planter': { g.add(bx(0.8, 0.5, 0.8, pm('plant', 0x6a6a64), 0, 0.25, 0), cy(0.05, 0.05, 1.0, pm('stem', 0x3a5a2a), 0, 0.9, 0, 5), new THREE.Mesh(new THREE.SphereGeometry(0.45, 8, 6), pm('leaf', 0x2a4a22))); g.children[2].position.y = 1.5; break; }
+    case 'shopcart': { const ch = pm('chromium', 0x9aa0a4); g.add(bx(0.55, 0.45, 0.85, pm('cartw', 0x8a9094), 0, 0.7, 0), cy(0.06, 0.06, 0.04, ch, -0.22, 0.06, 0.3, 8), cy(0.06, 0.06, 0.04, ch, 0.22, 0.06, -0.3, 8), bx(0.55, 0.04, 0.04, pm('carth', 0xc02020), 0, 1.0, -0.45)); break; }
     case 'ivstand': { const ch = pm('chromium', 0x9aa0a4); g.add(cy(0.02, 0.02, 1.8, ch, 0, 0.9, 0, 6), cy(0.22, 0.22, 0.03, ch, 0, 0.03, 0, 10), bx(0.1, 0.3, 0.05, pm('ivbag', 0xcfe3d8), 0, 1.65, 0)); break; }
   }
   return g;
@@ -89,6 +93,8 @@ const DECOR = {
   pool:     { props: ['wetsign', 'cone', 'bin'], decal: [0xaee6f0, 0.4] },
   office:   { props: ['bin', 'crate', 'bin'], decal: [0x1a1a10, 0.5] },
   run:      { props: ['biobox', 'ivstand', 'bin'], pipes: 'rail', decal: [0x5a0808, 0.6] },
+  hotel:    { props: ['luggage', 'vase', 'luggage', 'chair'], pipes: 'rail', decal: [0x1a0404, 0.45] },
+  mall:     { props: ['shopcart', 'planter', 'bin', 'wetsign'], decal: [0x30404a, 0.4] },
 };
 
 let decalTex = null;

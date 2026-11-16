@@ -74,7 +74,7 @@ function initMsg(c) {
     t: 'init', id: c.id, level: G.idx, levels: LEVELS.length, seed: G.seed,
     objs: G.objs, goals: goalLines(G), held: G.pz.fuses.held, upgrades: { map: state.TEAM.map },
     spawn: { x: c.x, y: c.y, z: c.z }, wl: G.map.wl, dead: deadIds(), world: ADM.worldMsg(), admin: !!c.admin,
-    obst: G.extraObst || [], cells: G.cellLog || [],
+    obst: G.extraObst || [], cells: G.cellLog || [], powered: !!(G.pz.mall && G.pz.mall.powered),
     players: playerList(),
   };
 }
@@ -120,6 +120,8 @@ function teleport(G, p, pos, reason) {
 }
 
 PZ.hooks.teleport = (G, p, pos, reason) => teleport(G, p, pos, reason);
+PZ.hooks.kill = (G, p, reason, pub) => killPlayer(G, p, reason, pub);
+PZ.hooks.finish = (G, ending) => finishLevel(G, ending);
 
 // Существо поймало игрока: телепорт (или рестарт забега на уровне-погоне)
 function catchPlayer(G, p, m0) {
@@ -419,7 +421,11 @@ function onMessage(c, msg) {
   } else if (msg.t === 'use') {
     const o = G.objs.find((q) => q.id === msg.id);
     if (!o || !near(o, c, USE_DIST)) return;
-    if (o.text) { c.send({ t: 'note', title: o.title, text: o.text }); return; } // записки, кассеты, таблицы
+    if (o.text) { // записки, кассеты, таблицы
+      c.send({ t: 'note', title: o.title, text: o.text });
+      for (const name of G.cfg.puzzles) if (PUZZLES[name].read) PUZZLES[name].read(G, c, o);
+      return;
+    }
     if (o.kind === 'cage') { SS.freeCage(G, c, o); return; }
     if (o.kind === 'altar') {
       if (o.used) { c.send({ t: 'ev', text: 'Алтарь уже погас' }); return; }

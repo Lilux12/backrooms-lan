@@ -40,7 +40,10 @@ export function promptFor(o) {
     case 'steamvalve': return o.on ? 'Давление пара: норма' : '<b>E</b> Открыть вентиль пара';
     case 'radio': return '<b>E</b> Послушать рацию';
     case 'monitor': return '<b>E</b> Камеры наблюдения';
-    case 'lift': return o.broken ? 'Лифт сломан' : '<b>E</b> Лифт: следующий этаж';
+    case 'lift': return o.broken ? 'Лифт обесточен' : '<b>E</b> Лифт: следующий этаж';
+    case 'keyslot': return '<b>E</b> Ключница: повесить ключи';
+    case 'phone': return '<b>E</b> Снять трубку';
+    case 'genroof': return '<b>E</b> Завести генератор';
   }
   return '';
 }

@@ -15,7 +15,7 @@ const { log } = require('../clients');
 
 const PUZZLES = Object.assign({},
   require('./classic'), require('./parking'), require('./pools'), require('./tunnels'), require('./hospital'), require('./offices'),
-  require('./hotel'));
+  require('./hotel'), require('./mall'), require('./lab'));
 
 const FINALE_MUL = 1.15;     // после открытия выхода существа быстрее
 const HINT_AFTER = 300;      // через столько секунд без прогресса — подсказка
@@ -73,7 +73,7 @@ function enterCode(G, c, value) {
 
 /* ----------------- Общие объекты, которые есть на разных уровнях ----------------- */
 const CCTV_TIME = 15;
-const hooks = { teleport: null };
+const hooks = U.hooks; // teleport, kill, finish задаёт game.js
 
 function useCommon(G, c, o) {
   if (o.kind === 'switch') return U.useSwitch(G, c, o);
@@ -96,6 +96,13 @@ function useCommon(G, c, o) {
     broadcast({ t: 'sfx', name: 'lift', x: o.x, y: o.y, z: o.z });
     hooks.teleport(G, c, { x: next.x, y: next.y, z: next.z }, 'lift');
     c.send({ t: 'ev', text: `Лифт: ${(G.cfg.floorNames && G.cfg.floorNames[next.f]) || 'этаж ' + (next.f + 1)}` });
+    return true;
+  }
+  if (o.kind === 'phone') {
+    const lines = G.cfg.phone || ['…гудки…'];
+    G.phoneK = ((G.phoneK == null ? -1 : G.phoneK) + 1) % lines.length;
+    c.send({ t: 'note', title: G.cfg.phoneTitle || 'Телефон', text: lines[G.phoneK], radio: true });
+    broadcast({ t: 'sfx', name: 'radio', x: o.x, y: o.y, z: o.z });
     return true;
   }
   if (o.kind === 'radio') {

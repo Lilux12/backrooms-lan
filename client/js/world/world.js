@@ -6,10 +6,10 @@ import { applyStyle, curStyle, mats, panelMat } from '../render/lighting.js';
 import { createObj } from './objects.js';
 import { addDecor, addObstacle } from './props.js';
 import { buildLevelGeometry } from './geometry.js';
-import { buildFx } from './fx.js';
+import { buildDoorPlates, buildFx } from './fx.js';
 
 /* ============================== Мир ============================== */
-export let map = null, world = null, H = 3.2, curLevel = 0, water = null, fx = null;
+export let map = null, world = null, H = 3.2, curLevel = 0, water = null, fx = null, plates = null;
 let geoGroup = null, curSeed = 0;
 export const objs = new Map(); // id -> {o, group, parts, baseY}
 let extraMats = [];
@@ -41,6 +41,9 @@ export function buildWorld(level, seed, objList, wl) {
   buildGeo();
   fx = buildFx(map);
   world.add(fx.group);
+  if (plates) plates.dispose();
+  plates = buildDoorPlates(map);
+  if (plates) world.add(plates.mesh);
 
   // Объекты (дверь первой, чтобы терминал знал её направление)
   const sorted = objList.slice().sort((a, b) => (a.kind === 'door' ? -1 : 0) - (b.kind === 'door' ? -1 : 0));

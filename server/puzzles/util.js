@@ -128,7 +128,7 @@ function nodeNear(G, rnd, a, dMin, dMax, prefer = () => true) {
 }
 
 // Хуки, которые задаёт index.js (иначе получились бы циклические require)
-const hooks = { sendGoals: () => {}, checkSolved: () => {} };
+const hooks = { sendGoals: () => {}, checkSolved: () => {}, teleport: () => {}, kill: () => {}, finish: () => {} };
 const sendGoals = (G) => hooks.sendGoals(G);
 const checkSolved = (G) => hooks.checkSolved(G);
 
