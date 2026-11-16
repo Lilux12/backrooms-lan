@@ -7,7 +7,7 @@ import { sendNet } from '../net/net.js';
 import { openKeypad } from '../ui/hud.js';
 
 /* ---------- Взаимодействие ---------- */
-const INTERACTIVE = ['box', 'lever', 'note', 'keypad', 'valve', 'drain', 'paper', 'lore', 'pump'];
+const INTERACTIVE = ['box', 'lever', 'note', 'keypad', 'valve', 'drain', 'paper', 'lore', 'pump', 'cage'];
 export function nearestUsable() {
   let best = null, bd = 3.2;
   for (const rec of objs.values()) {
@@ -32,6 +32,7 @@ export function promptFor(o) {
     case 'paper': return '<b>E</b> Прочитать: ' + (o.title || 'таблица');
     case 'lore': return '<b>E</b> ' + (/плёнк|касс/i.test(o.title || '') ? 'Посмотреть: ' : 'Прочитать: ') + (o.title || 'записка');
     case 'pump': return '<b>E</b> Пульт насоса';
+    case 'cage': return '<b>E</b> Открыть клетку';
   }
   return '';
 }

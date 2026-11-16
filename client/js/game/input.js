@@ -7,6 +7,7 @@ import { closeKeypad, updateKeypad } from '../ui/hud.js';
 import { useNearest } from './interact.js';
 import { toggleBigMap } from '../ui/maps.js';
 import { toggleTorch } from './player.js';
+import { onSocialKey, social } from './social.js';
 
 addEventListener('keydown', (e) => {
   if (keypad.open) {
@@ -19,6 +20,8 @@ addEventListener('keydown', (e) => {
     } else if (e.code === 'KeyQ' || e.code === 'KeyE') closeKeypad();
     return;
   }
+  if (social.chatOpen || social.asked) return;
+  if (S.joined && (S.locked || social.caged) && !e.repeat && onSocialKey(e.code)) { e.preventDefault(); return; }
   keys[e.code] = true;
   if (e.code === 'KeyH') { S.mmOn = !S.mmOn; $('minimapWrap').style.display = S.mmOn ? 'block' : 'none'; }
   if (e.code === 'KeyF' && S.joined && S.locked && !e.repeat) toggleTorch();

@@ -121,3 +121,21 @@ select { font: inherit; background: #1b1707; color: var(--y); border: 1px solid 
 button.small { width: 100%; margin-top: 8px; padding: 7px 0; font: inherit; font-size: 13px; cursor: pointer;
   background: rgba(0,0,0,.4); color: var(--y); border: 1px solid var(--line); }
 button.small:hover { border-color: var(--y); }
+
+/* Чат, кодовое слово, проверки, клетка */
+#secret { position: absolute; top: 16px; left: 50%; transform: translateX(-50%); margin-top: 26px; font-size: 13px; opacity: .8; white-space: nowrap; }
+#secret b { color: var(--y2); letter-spacing: 2px; }
+#chat { position: absolute; left: 16px; bottom: 250px; width: min(420px, 60vw); font-size: 14px; pointer-events: auto; }
+#chatLog div { padding: 2px 6px; background: rgba(0,0,0,.35); margin-top: 2px; transition: opacity .5s; }
+#chatLog div.sys { color: #ffb08a; }
+#chatLog b { color: #9fd0ff; font-weight: normal; }
+#chatInput { display: none; width: 100%; margin-top: 4px; padding: 7px 9px; font: inherit; background: rgba(0,0,0,.7); color: var(--y); border: 1px solid var(--line); outline: none; }
+#pinged { display: none; position: absolute; top: 40%; left: 0; right: 0; text-align: center; font-size: 22px; color: #ffe08a; animation: blink 0.8s steps(2) infinite; }
+#askBox { display: none; position: absolute; left: 50%; top: 45%; transform: translate(-50%, -50%); padding: 18px 22px; background: rgba(10,8,2,.92);
+  border: 1px solid var(--y); text-align: center; pointer-events: auto; font-size: 16px; }
+#askBox input { display: block; margin: 10px auto 6px; padding: 8px; font: inherit; font-size: 20px; text-align: center; text-transform: uppercase;
+  background: #000; color: var(--y2); border: 1px solid var(--line); outline: none; }
+#askBox small { opacity: .6; }
+#cagedBox { display: none; position: absolute; inset: 0; align-items: flex-end; justify-content: center; padding-bottom: 18vh; text-align: center;
+  background: repeating-linear-gradient(90deg, rgba(0,0,0,.75) 0 14px, rgba(0,0,0,0) 14px 90px); font-size: 30px; letter-spacing: 6px; color: #ff9a80; }
+#cagedBox small { display: block; font-size: 15px; letter-spacing: 1px; margin-top: 8px; color: var(--y); }

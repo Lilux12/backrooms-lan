@@ -15,6 +15,7 @@ import { placeMe, updateBattery, updateCamera, updateMovement } from './game/pla
 
 // Модуль ввода вешает обработчики клавиш при загрузке.
 import './game/input.js';
+import { fadeChat, tickExpose } from './game/social.js';
 
 let last = performance.now();
 
@@ -39,6 +40,8 @@ function update(dt) {
   const prox = clamp(1 - mobDist / 34, 0, 1); // 0 — существ рядом нет, 1 — вплотную
   updateAudio(dt, prox, !!(me.body && me.body.underwater));
   updateHud(dt, prox);
+  tickExpose(dt);
+  fadeChat();
 }
 
 function frame(now) {

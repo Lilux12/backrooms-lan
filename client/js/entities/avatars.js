@@ -53,7 +53,9 @@ function makeAvatar(id, name) {
   const beamGlow = glowSprite(0xfff1c0, 0.9, 0.8); beamGlow.position.set(0.35, 1.0, 0.3);
   torch.visible = beam.visible = beamGlow.visible = false;
   parts.torch = torch; parts.beam = beam; parts.beamGlow = beamGlow;
-  g.add(torso, hip, neck, head, cap, eyes, pack, parts.armL, parts.armR, parts.legL, parts.legR, torch, beam, beamGlow, nameSprite(name));
+  const tag = nameSprite(name);
+  g.add(torso, hip, neck, head, cap, eyes, pack, parts.armL, parts.armR, parts.legL, parts.legR, torch, beam, beamGlow, tag);
+  g.userData.nameTag = tag;
   g.userData.parts = parts;
   return g;
 }
@@ -63,11 +65,17 @@ export function setPlayers(list) {
   for (const p of list) {
     if (p.id === S.myId) continue;
     const r = remotes.get(p.id);
-    if (r) r.name = p.name;
+    if (r) {
+      if (r.name !== p.name) { // ник сменился — перерисовать табличку
+        r.mesh.remove(r.nameTag); r.nameTag.material.map.dispose(); r.nameTag.material.dispose();
+        r.nameTag = nameSprite(p.name); r.mesh.add(r.nameTag);
+      }
+      r.name = p.name;
+    }
     else {
       const mesh = makeAvatar(p.id, p.name);
       mesh.visible = false; scene.add(mesh);
-      remotes.set(p.id, { mesh, parts: mesh.userData.parts, x: 0, y: 0, z: 0, r: 0, tx: 0, ty: 0, tz: 0, tr: 0, crouch: false, name: p.name, seen: false, fl: false, walk: 0 });
+      remotes.set(p.id, { mesh, parts: mesh.userData.parts, nameTag: mesh.userData.nameTag, x: 0, y: 0, z: 0, r: 0, tx: 0, ty: 0, tz: 0, tr: 0, crouch: false, name: p.name, seen: false, fl: false, walk: 0, wave: 0 });
     }
   }
   for (const [id, r] of remotes) if (!ids.has(id)) { scene.remove(r.mesh); remotes.delete(id); }
@@ -83,6 +91,10 @@ export function updateRemotes(dt) {
     r.walk += dt * clamp(spd, 0, 7) * 2.1;
     const am = clamp(spd / 3.5, 0, 1), swg = Math.sin(r.walk) * 0.7 * am;
     r.parts.armL.rotation.x = swg; r.parts.armR.rotation.x = -swg * 0.4 - 0.9 * (r.fl ? 1 : 0);
+    // жест-ответ на проверку: машет левой рукой; «сбой» — рука дёргается невпопад
+    if (r.wave > 0) { r.wave -= dt; r.parts.armL.rotation.x = -2.6; r.parts.armL.rotation.z = Math.sin(r.wave * 14) * 0.5; }
+    else if (r.wave < 0) { r.wave += dt; r.parts.armL.rotation.x = Math.random() * 3 - 1.5; r.parts.armL.rotation.z = Math.random() - 0.5; r.mesh.rotation.y += (Math.random() - 0.5) * 0.4; }
+    else r.parts.armL.rotation.z = 0;
     r.parts.legL.rotation.x = -swg; r.parts.legR.rotation.x = swg;
     r.parts.torch.visible = r.parts.beam.visible = r.parts.beamGlow.visible = r.fl;
     r.mesh.position.set(r.x, r.y + Math.abs(Math.sin(r.walk)) * 0.04 * am, r.z);

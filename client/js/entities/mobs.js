@@ -54,6 +54,18 @@ function makeMob(type) {
     body.add(torso, coat, head, glow, parts.armL, parts.armR);
     body.position.y = 0; body.rotation.x = 0.45; body.position.z = 0.15;
     g.add(body, parts.legL, parts.legR);
+  } else if (type === 'skinstealer') {
+    // Двойник без маски: слишком длинное бледное тело, на плечах — обрывки чужой одежды, лицо «сползает»
+    const skin = lam(0xd9c8b8, 0x1a1008), rag = lam(0x55607a), red = lam(0x7a1010, 0x200000);
+    const torso = new THREE.Mesh(new THREE.CylinderGeometry(0.18, 0.12, 1.6, 10), skin); torso.position.y = 1.9;
+    const cloth = new THREE.Mesh(new THREE.CylinderGeometry(0.27, 0.3, 0.7, 10, 1, true), rag); cloth.position.y = 2.25; cloth.material.side = THREE.DoubleSide;
+    const head = new THREE.Mesh(new THREE.SphereGeometry(0.2, 14, 12), skin); head.scale.set(0.9, 1.5, 0.9); head.position.set(0, 3.0, 0.05);
+    const mouth = new THREE.Mesh(new THREE.BoxGeometry(0.16, 0.42, 0.02), red); mouth.position.set(0, 2.85, 0.24);
+    const eyes = new THREE.Mesh(new THREE.BoxGeometry(0.2, 0.03, 0.02), basic(0x050505)); eyes.position.set(0, 3.15, 0.22);
+    parts.armL = limb(2.2, 0.045, 0.025, skin, -0.3, 2.6, 0); parts.armR = limb(2.2, 0.045, 0.025, skin, 0.3, 2.6, 0);
+    parts.legL = limb(1.2, 0.06, 0.04, skin, -0.12, 1.15, 0); parts.legR = limb(1.2, 0.06, 0.04, skin, 0.12, 1.15, 0);
+    body.add(torso, cloth, head, mouth, eyes, parts.armL, parts.armR);
+    g.add(body, parts.legL, parts.legR);
   } else if (type === 'drowner') {
     // Утопленник: раздутое бледное тело, длинные руки тянутся вперёд, волосы-водоросли
     const skin = lam(0x8fa79c, 0x0c1a14), dark = lam(0x2a3a30, 0x050a08);

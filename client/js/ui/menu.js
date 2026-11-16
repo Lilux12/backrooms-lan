@@ -5,6 +5,7 @@ import { S, me } from '../core/state.js';
 import { applyQuality, camera, renderer } from '../render/scene.js';
 import { A, initAudio } from '../audio/audio.js';
 import { connect, sendNet } from '../net/net.js';
+import { social } from '../game/social.js';
 import { setStatus } from './hud.js';
 import { closeBigMap } from './maps.js';
 
@@ -28,6 +29,7 @@ nameInput.addEventListener('keydown', (e) => { e.stopPropagation(); if (e.key ==
 document.addEventListener('pointerlockchange', () => {
   S.locked = document.pointerLockElement === renderer.domElement;
   if (!S.locked) closeBigMap();
+  if (social.chatOpen || social.asked) return; // курсор нужен для чата — это не пауза
   if (S.started && S.joined && !S.locked) {
     $('subtitle').textContent = 'ПАУЗА · КЛИК, ЧТОБЫ ПРОДОЛЖИТЬ (существо не ждёт!)';
     $('play').textContent = 'ПРОДОЛЖИТЬ';

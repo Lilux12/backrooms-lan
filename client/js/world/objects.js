@@ -230,6 +230,38 @@ export function createObj(o) {
       rec.parts.screen = screen; rec.face = true;
       break;
     }
+    case 'cage': {
+      // клетка из прутьев; кто внутри — видно только вблизи (сервер присылает cageview)
+      const bar = lam(0x50565c), H2 = 2.4;
+      for (let k = 0; k < 16; k++) { const a = (k / 16) * Math.PI * 2; grp.add(cy(0.035, 0.035, H2, bar, Math.cos(a) * 1.1, H2 / 2, Math.sin(a) * 1.1, 6)); }
+      grp.add(cy(1.2, 1.2, 0.1, bar, 0, H2, 0, 16), cy(1.2, 1.2, 0.1, bar, 0, 0.05, 0, 16));
+      const fig = new THREE.Group();
+      fig.add(cy(0.22, 0.25, 0.9, lam(0x6a6a72), 0, 0.75, 0, 10), new THREE.Mesh(new THREE.SphereGeometry(0.17, 12, 10), lam(0xd8b898)));
+      fig.children[1].position.y = 1.35; fig.rotation.x = 0.5; fig.position.y = -0.2; fig.visible = false;
+      let tag = null;
+      grp.add(fig);
+      grp.position.set(o.x, 0, o.z);
+      rec.parts.setPrisoner = (name) => {
+        fig.visible = !!name;
+        if (tag) { grp.remove(tag); tag = null; }
+        if (name) {
+          tag = textPlane((g) => { g.clearRect(0, 0, 256, 256); g.fillStyle = '#ffb090'; g.font = 'bold 30px Courier New'; g.textAlign = 'center'; g.fillText(name, 128, 128); }, 1.6);
+          tag.position.y = 2.9; tag.onBeforeRender = (r, sc, cam) => tag.quaternion.copy(cam.quaternion);
+          grp.add(tag);
+        }
+      };
+      break;
+    }
+    case 'detector': {
+      grp.add(bx(0.18, 0.3, 0.08, lam(0x2a2e33), 0, 0, 0), bx(0.12, 0.08, 0.01, basic(0x30ff60), 0, 0.06, 0.045), cy(0.012, 0.012, 0.25, lam(0x999999), 0.05, 0.25, 0, 5), glowSprite(0x60ff90, 1.3, 0.5));
+      grp.position.set(o.x, 1.0, o.z); rec.bob = true;
+      break;
+    }
+    case 'noisemaker': {
+      grp.add(cy(0.09, 0.09, 0.22, lam(0xd04020, 0x300a05), 0, 0, 0, 10), cy(0.03, 0.03, 0.08, lam(0xdddddd), 0, 0.15, 0, 6), glowSprite(0xff8040, 1.1, 0.45));
+      grp.position.set(o.x, 1.0, o.z); rec.bob = true;
+      break;
+    }
     case 'door': {
       G.doorObj = o;
       const alongX = o.dx !== 0;

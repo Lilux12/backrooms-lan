@@ -41,6 +41,11 @@
   <div id="bigmap"><h3>УЛУЧШЕННАЯ КАРТА · <span id="bigLv"></span></h3><canvas id="bigcanvas" width="720" height="720"></canvas>
     <div class="lg"><span><i style="background:#ff3b30"></i>существа</span><span><i style="background:#6fa8ff"></i>игроки</span><span><i style="background:#7fe8ff"></i>вода</span>
       <span><i style="background:#ffb030"></i>предметы</span><span><i style="background:#30ff60"></i>выход открыт</span><span><kbd>M</kbd> закрыть</span></div></div>
+  <div id="secret"></div>
+  <div id="chat"><div id="chatLog"></div><input id="chatInput" maxlength="120" placeholder="Сообщение… (Enter — отправить, Esc — отмена)" autocomplete="off"></div>
+  <div id="pinged"></div>
+  <div id="askBox"><b id="askWho"></b> спрашивает ваше кодовое слово:<input id="askInput" maxlength="20" autocomplete="off"><small>Enter — ответить</small></div>
+  <div id="cagedBox"><div>ВЫ В КЛЕТКЕ<small>Двойник ходит в вашем облике. Напишите друзьям (Enter) и ждите, пока вас освободят.</small></div></div>
   <div id="banner"></div>
 </div>
 
@@ -69,6 +74,10 @@
             <span><kbd>F</kbd></span><span>фонарик (садится батарея)</span>
             <span><kbd>E</kbd></span><span>действие: рычаг, щиток, записка, терминал</span>
             <span><kbd>M</kbd></span><span>карта на весь экран (нужна улучшенная карта)</span>
+            <span><kbd>G</kbd></span><span>проверить игрока жестом (на кого смотрите); ответить на проверку</span>
+            <span><kbd>Y</kbd> / <kbd>V</kbd></span><span>спросить кодовое слово / детектор</span>
+            <span><kbd>B</kbd></span><span>бросить шумелку</span>
+            <span><kbd>Enter</kbd></span><span>чат</span>
             <span><kbd>H</kbd></span><span>скрыть миникарту</span>
             <span><kbd>Esc</kbd></span><span>пауза (игра идёт дальше)</span>
           </div>

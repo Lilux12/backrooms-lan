@@ -4,7 +4,8 @@ const BR = require('../shared/map.js');
 const { TILE, N, LEVELS } = BR;
 const config = require('./config');
 const state = require('./state');
-const { joinedList, joinedCount, broadcast, sendPlayers, log } = require('./clients');
+const { clients, joinedList, joinedCount, broadcast, sendPlayers, playerList, clearVirtuals, log } = require('./clients');
+const SS = require('./skinstealer');
 const { updateMob, randomFloorFar, inWater } = require('./mobs');
 const { PUZZLES, removeObj, goalLines, sendGoals, enterCode, near, tickWater, PICK_DIST } = require('./puzzles');
 const { buildLevel, chasePackPos } = require('./level');
@@ -16,7 +17,11 @@ const USE_DIST = 3.6;         // дальность взаимодействия
 const EXIT_DIST = 2.6;        // радиус «у двери»
 const EXIT_WAIT = 8;          // сколько ждём остальных, когда кто-то у двери
 const CHASE_WAKE_DIST = 9;    // «Беги!»: стая просыпается, когда игрок отошёл от старта
-const MOB_TYPES = ['stalker', 'runner', 'drowner']; // индекс типа уходит клиенту в снапшоте
+const MOB_TYPES = ['stalker', 'runner', 'drowner', 'skinstealer']; // индекс типа уходит клиенту в снапшоте
+const CHECK_DIST = 14;        // проверять игрока (пинг, слово, детектор) можно с такого расстояния
+const CHAT_GAP = 0.7;         // не чаще одного сообщения в чат за столько секунд
+const NOISE_DIST = 9;         // шумелка падает на столько метров вперёд
+const WORDS = ['ЛУНА', 'КОМПАС', 'ЯКОРЬ', 'ВОРОН', 'ЛАМПА', 'МАЯК', 'ТУМАН', 'КЛЮЧ', 'СОВА', 'КАМЕНЬ', 'ОКНО', 'ПЕСОК', 'ЗВЕЗДА', 'РЕКА'];
 
 function setPos(c, p) {
   c.x = p.x; c.y = p.y; c.z = p.z;
@@ -40,10 +45,23 @@ function placeAtSpawn(c) {
 function startLevel(idx) {
   const seed = (Math.random() * 0x7fffffff) >>> 0;
   if (idx === 0) state.TEAM.map = false;
+  clearVirtuals();
   const G = state.G = buildLevel(idx, seed, state.TEAM, { forceMap: config.FORCE_MAP });
-  for (const c of joinedList()) { placeAtSpawn(c); c.codeTries = 0; c.send(initMsg(c)); }
+  G.catchHook = (p, m) => catchPlayer(G, p, m);
+  for (const c of joinedList()) { resetPlayer(c); placeAtSpawn(c); c.send(initMsg(c)); sendSecret(c); }
   log(`УРОВЕНЬ ${idx} «${G.cfg.name}», seed ${seed}, хэш карты ${G.map.hash}`);
 }
+
+// Новый уровень: клетки, предметы, кодовое слово — заново
+function resetPlayer(c) {
+  c.codeTries = 0; c.caged = 0; c.pingT = 0; c.askBy = 0;
+  c.items = { detector: 0, noise: 0 };
+  const used = new Set(joinedList().filter((p) => p !== c).map((p) => p.word));
+  const free = WORDS.filter((w) => !used.has(w));
+  c.word = free[Math.floor(Math.random() * free.length)] || WORDS[0];
+}
+function sendSecret(c) { c.send({ t: 'secret', word: c.word }); c.send({ t: 'items', items: c.items }); }
+const clientById = (id) => { const c = clients.get(id); return c && c.joined ? c : null; };
 
 function initMsg(c) {
   const G = state.G;
@@ -51,7 +69,7 @@ function initMsg(c) {
     t: 'init', id: c.id, level: G.idx, levels: LEVELS.length, seed: G.seed,
     objs: G.objs, goals: goalLines(G), held: G.pz.fuses.held, upgrades: { map: state.TEAM.map },
     spawn: { x: c.x, y: c.y, z: c.z }, wl: G.map.wl,
-    players: joinedList().map((p) => ({ id: p.id, name: p.name })),
+    players: playerList(),
   };
 }
 
@@ -72,6 +90,11 @@ function touchObjects(G, p) {
       broadcast({ t: 'pick', id: o.id, kind: 'mapitem', by: p.name });
       broadcast({ t: 'upgrade', what: 'map', by: p.name });
       log(`${p.name} нашёл улучшенную карту`);
+    } else if ((o.kind === 'detector' || o.kind === 'noisemaker') && near(o, p, PICK_DIST)) {
+      removeObj(G, o);
+      if (o.kind === 'detector') p.items.detector = 1; else p.items.noise++;
+      p.send({ t: 'items', items: p.items });
+      broadcast({ t: 'pick', id: o.id, kind: o.kind, by: p.name });
     } else if (o.kind === 'water' && near(o, p, PICK_DIST)) {
       removeObj(G, o);
       broadcast({ t: 'pick', id: o.id, kind: 'water', by: p.name });
@@ -105,6 +128,45 @@ function catchPlayer(G, p, m0) {
   }
 }
 
+// Кто сидит в клетке — видно только вблизи (сообщение уходит лишь тем, кто рядом)
+function cageViews(G, dt, players) {
+  G.cageT = (G.cageT || 0) - dt;
+  if (G.cageT > 0) return;
+  G.cageT = 0.5;
+  for (const p of players) {
+    for (const o of G.objs) {
+      if (o.kind !== 'cage' || !near(o, p, 10)) continue;
+      const pr = o.prisoner ? clientById(o.prisoner) : null;
+      p.send({ t: 'cageview', id: o.id, name: pr ? pr.name : null });
+    }
+  }
+}
+
+// Цель проверки (пинг/слово/детектор): настоящий игрок или двойник, рядом и в прямой видимости
+function checkTarget(G, c, id) {
+  const pos = G.ss && SS.isMask(G, id) ? G.ss.m : clientById(id);
+  if (!pos || pos === c || pos.caged) return false;
+  return Math.hypot(pos.x - c.x, pos.z - c.z) < CHECK_DIST && Math.abs(pos.y - c.y) < 3 &&
+    BR.los3(G.map, c.x, c.y + 1.5, c.z, pos.x, pos.y + 1.5, pos.z);
+}
+
+// Шумелка: падает впереди, существа идут на звук, разоблачённый двойник отвлекается
+function throwNoise(G, c) {
+  if (!c.items.noise) return;
+  c.items.noise--;
+  c.send({ t: 'items', items: c.items });
+  const fx = -Math.sin(c.r), fz = -Math.cos(c.r);
+  let x = c.x, z = c.z;
+  for (let d = 0; d < NOISE_DIST; d += 0.5) {
+    if (BR.solidAt(G.map, c.x + fx * d, c.y + 1.2, c.z + fz * d)) break;
+    x = c.x + fx * d; z = c.z + fz * d;
+  }
+  const node = BR.nodeAt(G.map, x, c.y + 0.1, z);
+  broadcast({ t: 'noise', x, y: c.y, z });
+  if (node >= 0) for (const m of G.mobs) if (m.type !== 'drowner') { m.alert = { node, t: 12 }; m.mode = 'wander'; }
+  if (G.ss && G.ss.state === 'EXPOSED') G.ss.stunned = 3;
+}
+
 let lastTick = process.hrtime.bigint();
 function tick() {
   const now = process.hrtime.bigint();
@@ -121,10 +183,13 @@ function tick() {
   }
 
   tickWater(G, dt);
-  for (const m of G.mobs) updateMob(G, m, dt, players);
+  const active = players.filter((p) => !p.caged); // в клетке — не участвуют
+  for (const m of G.mobs) updateMob(G, m, dt, active);
+  SS.tickPings(G, dt, players);
+  if (G.ss) { SS.tickStealer(G, dt, players); SS.detectorBeeps(G, players, dt); cageViews(G, dt, players); }
 
   let goalsChanged = false;
-  for (const p of players) {
+  for (const p of active) {
     if (p.invuln > 0) p.invuln -= dt;
     if (touchObjects(G, p)) goalsChanged = true;
     const m0 = G.mobs.find((m) => m.stun <= 0 && !m.hidden && p.invuln <= 0 && Math.hypot(m.x - p.x, m.z - p.z) < CATCH_DIST &&
@@ -135,7 +200,7 @@ function tick() {
   // Погоня: стая просыпается, когда кто-то отошёл от укрытия
   if (G.cfg.chase && G.chaseState === 'idle') {
     const sp = G.map.spawn;
-    if (players.some((p) => Math.hypot(p.x - sp.x, p.z - sp.z) > CHASE_WAKE_DIST)) {
+    if (active.some((p) => Math.hypot(p.x - sp.x, p.z - sp.z) > CHASE_WAKE_DIST)) {
       G.chaseState = 'run';
       G.mobs.forEach((m, i) => { m.stun = 2.2 + i * 0.7; m.mode = 'chase'; });
       broadcast({ t: 'ev', text: 'БЕГИТЕ! Они проснулись!' });
@@ -143,13 +208,13 @@ function tick() {
     }
   }
 
-  for (const name of G.cfg.puzzles) if (PUZZLES[name].tick && PUZZLES[name].tick(G, players, dt)) goalsChanged = true;
+  for (const name of G.cfg.puzzles) if (PUZZLES[name].tick && PUZZLES[name].tick(G, active, dt)) goalsChanged = true;
   if (goalsChanged) sendGoals(G);
 
   // Выход: все у двери — уровень пройден; кто-то у двери — остальным EXIT_WAIT секунд
   if (G.doorOpen) {
-    const inside = players.filter((p) => near(G.door, p, EXIT_DIST));
-    if (inside.length === players.length) finishLevel(G);
+    const inside = active.filter((p) => near(G.door, p, EXIT_DIST));
+    if (inside.length && inside.length === active.length) finishLevel(G);
     else if (inside.length) {
       if (!G.exitArmed) { G.exitArmed = true; G.exitTimer = EXIT_WAIT; broadcast({ t: 'ev', text: `Кто-то уже у двери — остальные, скорее! (${EXIT_WAIT} с)` }); }
       G.exitTimer -= dt;
@@ -157,25 +222,34 @@ function tick() {
     } else { G.exitArmed = false; }
   }
 
+  // Снапшот: игроки в клетке не видны; двойник в маске — обычная запись игрока (тот же формат)
   const f = (v) => +v.toFixed(2);
-  broadcast({
-    t: 's',
-    p: players.map((c) => [c.id, f(c.x), f(c.y), f(c.z), f(c.r), c.fl ? 1 : 0, c.crouch ? 1 : 0]),
-    m: G.mobs.map((m) => [f(m.x), f(m.y), f(m.z), f(m.r), m.mode === 'chase' ? 1 : 0, m.stun > 0 || m.hidden ? 1 : 0, MOB_TYPES.indexOf(m.type)]),
-  });
+  const ps = active.map((c) => [c.id, f(c.x), f(c.y), f(c.z), f(c.r), c.fl ? 1 : 0, c.crouch ? 1 : 0]);
+  const mask = G.ss && SS.maskEntry(G, f);
+  if (mask) ps.push(mask);
+  ps.sort((a, b) => a[0] - b[0]);
+  const ms = G.mobs.map((m) => [f(m.x), f(m.y), f(m.z), f(m.r), m.mode === 'chase' ? 1 : 0, m.stun > 0 || m.hidden ? 1 : 0, MOB_TYPES.indexOf(m.type)]);
+  const monster = G.ss && SS.monsterEntry(G, f, MOB_TYPES.indexOf('skinstealer'));
+  if (monster) ms.push(monster);
+  broadcast({ t: 's', p: ps, m: ms });
 }
 
 function onJoin(c, msg) {
   c.name = String(msg.name || 'Игрок').replace(/[<>&]/g, '').trim().slice(0, 16) || 'Игрок';
   c.joined = true;
+  resetPlayer(c);
   placeAtSpawn(c);
   c.send(initMsg(c));
+  sendSecret(c);
   broadcast({ t: 'ev', text: `${c.name} зашёл в игру` });
   sendPlayers();
   log(`подключился: ${c.name} (онлайн: ${joinedCount()})`);
 }
 
 function onLeave(c) {
+  const G = state.G;
+  if (G && G.ss && SS.isMask(G, c.id)) SS.expose(G, `${c.name} покинул игру`); // жертва ушла — маска не держится
+  if (G && c.caged) { const cage = G.objs.find((o) => o.id === c.caged); if (cage) cage.prisoner = 0; }
   if (c.joined) { broadcast({ t: 'ev', text: `${c.name} вышел из игры` }); sendPlayers(); }
   log(`отключился: ${c.name} (онлайн: ${joinedCount()})`);
 }
@@ -186,6 +260,16 @@ function onMessage(c, msg) {
   const G = state.G;
   if (!c.joined || G.state !== 'play') return;
 
+  if (msg.t === 'chat') {
+    const now = Date.now() / 1000;
+    if (now - (c.chatT || 0) < CHAT_GAP) return;
+    c.chatT = now;
+    const text = String(msg.text || '').replace(/[<>&]/g, '').trim().slice(0, 120);
+    if (text) broadcast({ t: 'chat', id: c.id, name: c.name, text });
+    return;
+  }
+  if (msg.t === 'p' && c.caged) { const r = +msg.r; if (Number.isFinite(r)) c.r = r; return; } // в клетке — только смотреть
+  if (c.caged) return;
   if (msg.t === 'p') {
     const x = +msg.x, y = +msg.y, z = +msg.z, r = +msg.r;
     if ([x, y, z, r].every(Number.isFinite)) {
@@ -202,9 +286,32 @@ function onMessage(c, msg) {
     const o = G.objs.find((q) => q.id === msg.id);
     if (!o || !near(o, c, USE_DIST)) return;
     if (o.text) { c.send({ t: 'note', title: o.title, text: o.text }); return; } // записки, кассеты, таблицы
+    if (o.kind === 'cage') { SS.freeCage(G, c, o); return; }
     for (const name of G.cfg.puzzles) if (PUZZLES[name].use && PUZZLES[name].use(G, c, o)) return;
   } else if (msg.t === 'code') {
     if (G.cfg.puzzles.includes('code')) enterCode(G, c, msg.v);
+  } else if (msg.t === 'ping' || msg.t === 'ask' || msg.t === 'scan') {
+    const id = +msg.id;
+    if (!checkTarget(G, c, id)) return;
+    if (msg.t === 'ping') SS.ping(G, c, id, clientById);
+    else if (msg.t === 'ask') SS.ask(G, c, id, clientById);
+    else SS.scan(G, c, id, clientById);
+  } else if (msg.t === 'pong') {
+    SS.pong(G, c);
+  } else if (msg.t === 'answer') {
+    SS.answer(G, c, msg.word);
+  } else if (msg.t === 'throw') {
+    throwNoise(G, c);
+  } else if (msg.t === 'dbg' && config.TEST_HOOKS) {
+    // только для автотестов (TEST_HOOKS=1): ускорить двойника
+    if (msg.cmd === 'ss-victim' && G.ss) {
+      const v = clientById(+msg.id);
+      G.ss.victim = +msg.id; G.ss.state = 'STEAL'; G.ss.t = 30; G.ss.disguise = null;
+      if (v) { const m = G.ss.m; Object.assign(m.body, { x: v.x + 0.5, y: v.y, z: v.z, vy: 0 }); Object.assign(m, { x: v.x + 0.5, y: v.y, z: v.z }); }
+    }
+    if (msg.cmd === 'freeze-mobs') for (const m of G.mobs) m.stun = 1e9;
+    if (msg.cmd === 'give' && c.items[msg.item] !== undefined) { c.items[msg.item] = 1; c.send({ t: 'items', items: c.items }); }
+    if (msg.cmd === 'ss-unmask' && G.ss && G.ss.state === 'IMPERSONATE') G.ss.t = 999;
   } else if (msg.t === 'hash') {
     // клиент построил карту — сверяем геометрию
     if (msg.level === G.idx && msg.hash !== G.map.hash) {

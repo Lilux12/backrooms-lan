@@ -5,6 +5,7 @@ const BR = require('../shared/map.js');
 const { LEVELS, NN } = BR;
 const { PUZZLES } = require('./puzzles');
 const { newMob } = require('./mobs');
+const SS = require('./skinstealer');
 
 // team — улучшения команды (team.map — улучшенная карта уже найдена); opts.forceMap — для отладки
 function buildLevel(idx, seed, team, opts = {}) {
@@ -45,6 +46,13 @@ function buildLevel(idx, seed, team, opts = {}) {
       .forEach((p, k) => add('lore', { x: p.x, y: p.y, z: p.z, nx: p.nx, nz: p.nz, title: cfg.lore[k].title, text: cfg.lore[k].text }));
   }
 
+  // Предметы против двойника и клетки для его жертв
+  if (cfg.items) {
+    BR.pickSpots(map, rnd, cfg.items.detector || 0, { minDist: 0.2 * maxD }).forEach((p) => add('detector', { x: p.x, y: p.y, z: p.z }));
+    BR.pickSpots(map, rnd, cfg.items.noisemaker || 0, { minDist: 0.1 * maxD, minSep: 6 }).forEach((p) => add('noisemaker', { x: p.x, y: p.y, z: p.z }));
+  }
+  if (cfg.skinstealer) SS.placeCages(G, add, rnd);
+
   const list = cfg.mobList || [{ type: cfg.mobType, count: cfg.mobs }];
   if (cfg.chase) {
     G.chaseState = 'idle';
@@ -63,6 +71,7 @@ function buildLevel(idx, seed, team, opts = {}) {
     }
   }
   if (!cfg.puzzles.length) { G.doorOpen = true; BR.setDoor(map, true); G.door.open = true; } // уровни без головоломки
+  if (cfg.skinstealer) SS.createStealer(G);
   return G;
 }
 

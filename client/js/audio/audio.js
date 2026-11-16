@@ -75,6 +75,10 @@ export const sfx = {
   drain: () => { noiseBurst(220, 5.0, 0.45); tone(48, 5, 0.3, 'sine', 30); },
   pump: () => { for (let i = 0; i < 4; i++) tone(55 + i * 6, 2.5, 0.25, 'sawtooth', 70, i * 0.6); noiseBurst(300, 6, 0.35); },
   splash: () => { noiseBurst(1400, 0.5, 0.35, 'bandpass'); noiseBurst(500, 0.8, 0.25); },
+  whisper: () => { for (let i = 0; i < 3; i++) noiseBurst(rand(2500, 4500), rand(0.3, 0.6), 0.06, 'bandpass'); tone(rand(180, 260), 0.8, 0.02, 'sine', rand(120, 200), 0.2); },
+  detector: () => tone(1800, 0.05, 0.12, 'square'),
+  shriek: () => { tone(900, 1.2, 0.35, 'sawtooth', 2400); tone(1300, 1.0, 0.25, 'square', 600, 0.05); noiseBurst(3000, 1.2, 0.5, 'highpass'); },
+  noise: () => { for (let i = 0; i < 8; i++) tone(rand(600, 1400), 0.12, 0.15, 'square', null, i * 0.15); },
   bubble: () => { const f = rand(300, 700); tone(f, 0.08, 0.08, 'sine', f * 1.8); },
 };
 

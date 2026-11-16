@@ -7,6 +7,7 @@ import { curLevel, map } from '../world/world.js';
 import { sfx } from '../audio/audio.js';
 import { toast } from '../ui/hud.js';
 import { sendNet } from '../net/net.js';
+import { social } from './social.js';
 
 const WALK = 3.6, RUN = 6.2;
 const O2_TIME = 25;           // секунд под водой до потери сознания
@@ -39,7 +40,7 @@ export function updateMovement(dt) {
   let moving = false, sprint = false;
   if (!(S.joined && map && me.body)) return { moving, sprint };
   const b = me.body;
-  const active = S.locked && !keypad.open && !S.bigOn;
+  const active = S.locked && !keypad.open && !S.bigOn && !social.caged;
   let ix = 0, iz = 0;
   if (active) {
     if (keys.KeyW || keys.ArrowUp) iz += 1;

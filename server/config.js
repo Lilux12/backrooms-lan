@@ -11,4 +11,5 @@ module.exports = {
   // Отладка: появиться рядом с объектом этого типа; карта всегда выпадает
   TEST_NEAR: env.TEST_NEAR || '',
   FORCE_MAP: !!env.FORCE_MAP,
+  TEST_HOOKS: !!env.TEST_HOOKS, // отладочные команды для автотестов — в игре не включать
 };
