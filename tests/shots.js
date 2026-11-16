@@ -73,9 +73,9 @@ async function main() {
   const br = await launchChrome(chrome);
   try {
     for (const lv of LEVELS) {
-      const srv = await startServer(PORT, { START_LEVEL: String(lv) });
+      const srv = await startServer(PORT, { START_LEVEL: String(lv), ANTICHEAT: '0' }); // камеру переставляем телепортом
       try {
-        const g = await openGame(br.port, `http://localhost:${PORT}/`);
+        const g = await openGame(br.port, `http://localhost:${PORT}/`, { preset: process.env.PRESET || 'high' });
         await g.ev(`document.getElementById('lvl').classList.remove('on'); document.getElementById('hud').style.visibility = 'hidden'`);
         for (const kind of KINDS) {
           const f = await g.ev(`(${FIND})('${kind}')`);

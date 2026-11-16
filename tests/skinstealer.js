@@ -44,8 +44,8 @@ class Bot {
 }
 
 // Свободная точка рядом с p, откуда p видно (по общей карте)
-function spotNear(map, p, d) {
-  for (let k = 0; k < 64; k++) {
+function spotNear(map, p, d0) {
+  for (const d of [d0, d0 - 1, d0 + 1, 2, d0 + 2, 1.5]) for (let k = 0; k < 64; k++) { // в узком коридоре — ближе или дальше
     const a = (k / 64) * Math.PI * 2, x = p.x + Math.cos(a) * d, z = p.z + Math.sin(a) * d;
     if (BR.blocked(map, x, p.y, z, BR.PHYS.R, BR.PHYS.H, BR.PHYS.STEP)) continue;
     if (Math.abs(BR.groundAt(map, x, p.y + 0.3, z, BR.PHYS.R, BR.PHYS.STEP) - p.y) > 0.3) continue;

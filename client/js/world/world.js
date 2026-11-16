@@ -3,6 +3,7 @@ import * as THREE from 'three';
 import { BR, LEVELS } from '../core/util.js';
 import { scene } from '../render/scene.js';
 import { applyStyle, curStyle, mats, panelMat } from '../render/lighting.js';
+import { settings } from '../core/settings.js';
 import { createObj } from './objects.js';
 import { addDecor, addObstacle } from './props.js';
 import { buildLevelGeometry } from './geometry.js';
@@ -14,10 +15,19 @@ let geoGroup = null, curSeed = 0;
 export const objs = new Map(); // id -> {o, group, parts, baseY}
 let extraMats = [];
 
+// Освободить геометрию, материалы и текстуры (кроме общих материалов стиля)
+const SHARED = new Set();
 function disposeWorld() {
   if (!world) return;
   scene.remove(world);
-  world.traverse((o) => { if (o.geometry) o.geometry.dispose(); });
+  world.traverse((o) => {
+    if (o.geometry) o.geometry.dispose();
+    for (const m of [].concat(o.material || [])) {
+      if (!m || SHARED.has(m) || m === panelMat || Object.values(mats || {}).includes(m)) continue;
+      if (m.map && !m.map.userData.shared) m.map.dispose();
+      m.dispose();
+    }
+  });
   for (const m of extraMats) { if (m.map) m.map.dispose(); m.dispose(); }
   extraMats = [];
   geoGroup = null; fx = null;
@@ -40,6 +50,8 @@ export function buildWorld(level, seed, objList, wl) {
   curSeed = seed;
   buildGeo();
   fx = buildFx(map);
+  // декоративный свет помечаем: на «Низком» он выключен (каждый источник дорог для шейдеров)
+  fx.group.traverse((o) => { if (o.isPointLight || o.isSpotLight) { o.userData.fx = true; o.visible = !!settings.fxLights; } });
   world.add(fx.group);
   if (plates) plates.dispose();
   plates = buildDoorPlates(map);
@@ -89,6 +101,14 @@ function buildGeo() {
   extraMats = geo.tileMats;
 }
 const LEVEL_STYLE = () => curStyle;
+
+// Сменились настройки графики (PBR, тени): пересобрать материалы и геометрию текущего уровня
+export function refreshGraphics() {
+  if (!map || !world) return;
+  applyStyle(LEVELS[curLevel].style);
+  buildGeo();
+  if (fx) world.traverse((o) => { if ((o.isPointLight || o.isSpotLight) && o.userData.fx) o.visible = !!settings.fxLights; });
+}
 
 // Сервер изменил клетку карты (геометрию пересобираем не чаще раза в кадр)
 let geoPending = false;

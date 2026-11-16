@@ -5,21 +5,42 @@ import { FL, S } from '../core/state.js';
 import { dust, hemi, lamp, scene, sun, torch } from './scene.js';
 import { STYLES } from './styles.js';
 import { W, fogMul, lightMul, updateWorldFx } from '../game/worldfx.js';
-import { A, setAmbience } from '../audio/audio.js';
+import { A, bindStyles, setAmbience } from '../audio/audio.js';
+import { settings } from '../core/settings.js';
+import { setGrade } from './post.js';
 
 export const panelMat = new THREE.MeshBasicMaterial({ color: 0xffffff, fog: false });
 const LIGHT = { fogD: 0.03, hemi: 1.7, sun: 1.2, lamp: 4.6, fog: new THREE.Color(0x000000), flick: [5, 16], pulse: false, panel: [1, 1, 1] };
 export let curStyle = null, mats = null;
 
+// Цветокоррекция каждого уровня (оттенок, насыщенность, контраст) — для постобработки
+const GRADES = {
+  yellow: { tint: [1.05, 1.0, 0.86], sat: 0.9, contrast: 1.06 }, concrete: { tint: [0.92, 0.98, 1.06], sat: 0.7, contrast: 1.1 },
+  tunnel: { tint: [1.08, 0.92, 0.85], sat: 0.95, contrast: 1.12 }, pool: { tint: [0.93, 1.03, 1.05], sat: 0.85, contrast: 1.0 },
+  run: { tint: [0.92, 1.04, 0.98], sat: 0.75, contrast: 1.12 }, office: { tint: [0.98, 1.02, 0.92], sat: 0.8, contrast: 1.05 },
+  hotel: { tint: [1.08, 0.96, 0.86], sat: 0.95, contrast: 1.08 }, mall: { tint: [0.95, 0.98, 1.04], sat: 0.7, contrast: 1.06 },
+  lab: { tint: [0.92, 1.02, 1.06], sat: 0.8, contrast: 1.1 }, school: { tint: [1.04, 1.0, 0.92], sat: 1.05, contrast: 1.0 },
+  factory: { tint: [1.1, 0.92, 0.8], sat: 0.9, contrast: 1.15 },
+};
+// Шероховатость поверхностей для PBR (плитка и вода блестят, ковёр и бетон — нет)
+const ROUGH = { pool: [0.6, 0.25, 0.8], mall: [0.7, 0.3, 0.9], lab: [0.6, 0.35, 0.9], run: [0.6, 0.4, 0.9], factory: [0.6, 0.55, 0.9], hotel: [0.9, 0.95, 0.9] };
+
+function makeMats(st, name, pbr) {
+  const r = ROUGH[name] || [0.9, 0.8, 0.95];
+  const M = (tex, bump, rough) => (pbr
+    ? new THREE.MeshStandardMaterial({ map: tex, bumpMap: tex, bumpScale: bump, roughness: rough, metalness: name === 'factory' ? 0.25 : 0 })
+    : new THREE.MeshLambertMaterial({ map: tex, bumpMap: tex, bumpScale: bump }));
+  return { wall: M(st._t.wall, 2.2, r[0]), floor: M(st._t.floor, 1.6, r[1]), ceil: M(st._t.ceil, 1.4, r[2]) };
+}
+
 export function applyStyle(name) {
   const st = STYLES[name];
   if (!st._t) st._t = st.tex();
-  if (!st._m) st._m = {
-    wall: new THREE.MeshLambertMaterial({ map: st._t.wall, bumpMap: st._t.wall, bumpScale: 2.2 }),
-    floor: new THREE.MeshLambertMaterial({ map: st._t.floor, bumpMap: st._t.floor, bumpScale: 1.6 }),
-    ceil: new THREE.MeshLambertMaterial({ map: st._t.ceil, bumpMap: st._t.ceil, bumpScale: 1.4 }),
-  };
-  curStyle = st; mats = st._m;
+  st._mm = st._mm || {};
+  const tier = settings.pbr ? 'pbr' : 'lam';
+  if (!st._mm[tier]) st._mm[tier] = makeMats(st, name, settings.pbr);
+  curStyle = st; mats = st._mm[tier];
+  setGrade(GRADES[name]);
   hemi.color.setHex(st.hemi[0]); hemi.groundColor.setHex(st.hemi[1]);
   sun.color.setHex(st.sun[0]); lamp.color.setHex(st.lamp[0]);
   LIGHT.hemi = st.hemi[2]; LIGHT.sun = st.sun[1]; LIGHT.lamp = st.lamp[1];
@@ -32,6 +53,7 @@ export function applyStyle(name) {
 }
 
 const flick = { next: rand(3, 8), dur: 0, k: 1 };
+bindStyles((name) => STYLES[name]); // звук узнаёт стиль уровня (реверберация, шаги)
 
 export function updateLight(dt) {
   flick.next -= dt;

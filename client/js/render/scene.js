@@ -6,11 +6,14 @@ import { settings } from '../core/settings.js';
 /* =============================== Сцена =============================== */
 export const renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
 let qOverride = null;
+export const dyn = { scale: 1 }; // динамическое разрешение: множитель 0.5..1, подстраивается под частоту кадров
 // q — масштаб разрешения; override (например, фильтр «8-бит») временно заменяет настройку
 export function applyQuality(override) {
   if (override !== undefined) qOverride = override;
-  renderer.setPixelRatio(Math.min(window.devicePixelRatio * (qOverride || settings.q), 2.2));
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio * (qOverride || settings.q) * (settings.dynres ? dyn.scale : 1), 2.2));
   renderer.setSize(innerWidth, innerHeight);
+  renderer.shadowMap.enabled = !!settings.shadows;
+  renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 }
 applyQuality();
 $('game').appendChild(renderer.domElement);
@@ -36,6 +39,13 @@ export const torch = new THREE.SpotLight(0xfff1cc, 0, 70, 0.4, 0.7, 1.1);
 torch.position.set(0.14, -0.14, 0.15);
 camera.add(torch, torch.target);
 torch.target.position.set(0.05, -0.12, -10);
+// тени от фонаря (пресеты «Высокое» и «Ультра»)
+export function applyShadows(size) {
+  torch.castShadow = !!settings.shadows;
+  if (torch.shadow.mapSize.x !== size) { torch.shadow.mapSize.set(size, size); if (torch.shadow.map) { torch.shadow.map.dispose(); torch.shadow.map = null; } }
+  torch.shadow.bias = -0.0015; torch.shadow.normalBias = 0.03;
+  torch.shadow.camera.near = 0.3; torch.shadow.camera.far = 40;
+}
 
 // Пылинки в воздухе
 const DUST_N = 320, DUST_R = 10;

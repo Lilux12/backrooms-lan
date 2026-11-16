@@ -1,5 +1,6 @@
 // Админ-панель хоста (F1 или ~). Формы строятся из общей спецификации shared/admin.js.
 // Клиент только отправляет запросы — права и аргументы проверяет сервер.
+import { renderLevelList } from './menu.js';
 import { $, BR, LEVELS } from '../core/util.js';
 import { S } from '../core/state.js';
 import { renderer } from '../render/scene.js';
@@ -74,6 +75,7 @@ export const toggleAdmin = () => (S.adminOpen ? closeAdmin() : openAdmin());
 export function onAdminNet(m) {
   if (m.t === 'auth') {
     S.admin = !!m.ok;
+    renderLevelList();
     $('aResult').textContent = m.ok ? 'Вы вошли как хост' : m.error;
     $('aResult').className = m.ok ? 'ok' : 'bad';
     if (S.adminOpen) render();

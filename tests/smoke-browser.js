@@ -8,8 +8,10 @@ const os = require('os');
 const path = require('path');
 const { spawn, execSync } = require('child_process');
 const { startServer } = require('./lib/server');
+const { presetScript } = require('./lib/browser');
 
 const PORT = 3902;
+const levelsRun = [];
 const OUT = process.env.SHOT_DIR || path.join(os.tmpdir(), 'backrooms-shots');
 
 function findChrome() {
@@ -50,6 +52,7 @@ async function main() {
       try { port = fs.readFileSync(path.join(prof, 'DevToolsActivePort'), 'utf8').split('\n')[0]; } catch (e) { /* ждём */ }
     }
     assert(port, 'Chromium не открыл порт отладки');
+    levelsRun.push(...levels);
     for (const level of levels) await runLevel(port, level);
   } finally {
     br.kill();
@@ -88,6 +91,7 @@ async function runLevel(cdpPort, level) {
       if (m.method === 'Log.entryAdded' && m.params.entry.level === 'error') errors.push(m.params.entry.text + ' ' + (m.params.entry.url || ''));
     });
     await page.send('Runtime.enable'); await page.send('Log.enable'); await page.send('Page.enable');
+    await page.send('Page.addScriptToEvaluateOnNewDocument', { source: presetScript(process.env.PRESET || 'low') });
     await page.send('Page.navigate', { url: `http://localhost:${PORT}/` });
     await sleep(2000);
     const ev = async (expr) => (await page.send('Runtime.evaluate', { expression: expr, returnByValue: true, awaitPromise: true })).result.value;
@@ -119,6 +123,22 @@ async function runLevel(cdpPort, level) {
     await key('KeyF');
     assert(await ev(`window.__br.FL.on`), `уровень ${level}: фонарик не включился`);
     await key('KeyH'); await key('KeyH'); await key('KeyM'); await key('KeyE');
+    // отладочный оверлей и дневник
+    await key('F3');
+    let perfOk = false;
+    for (let i = 0; i < 20 && !perfOk; i++) { await sleep(250); perfOk = await ev(`document.getElementById('perf').style.display === 'block' && /FPS/.test(document.getElementById('perf').textContent)`); }
+    assert(perfOk, `уровень ${level}: F3 не показывает FPS`);
+    await key('F3');
+    await key('KeyJ'); await sleep(200);
+    assert(await ev(`document.getElementById('journal').style.display === 'block'`), `уровень ${level}: дневник не открылся`);
+    await key('KeyJ');
+    // пресеты качества переключаются на лету без ошибок (на первом уровне прогона)
+    if (level === levelsRun[0]) {
+      for (const p of ['low', 'ultra', 'high']) {
+        await ev(`(() => { const s = document.getElementById('sPreset'); s.value = '${p}'; s.dispatchEvent(new Event('change')); })()`);
+        await sleep(600);
+      }
+    }
     await sleep(1200);
     const remote = await ev(`window.__br.remotes()`);
     assert(remote >= 1, `уровень ${level}: не виден второй игрок`);

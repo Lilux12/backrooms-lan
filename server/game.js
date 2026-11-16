@@ -52,7 +52,7 @@ function startLevel(idx, forcedSeed) {
   const G = state.G = buildLevel(idx, seed, state.TEAM, { forceMap: config.FORCE_MAP });
   G.catchHook = (p, m) => catchPlayer(G, p, m);
   G.stats = { start: Date.now(), deaths: 0, notes: new Set(), exposed: 0 };
-  for (const c of joinedList()) { resetPlayer(c); placeAtSpawn(c); }
+  for (const c of joinedList()) { resetPlayer(c); placeAtSpawn(c); grace(c, 3000); }
   for (const c of joinedList()) { c.send(initMsg(c)); sendSecret(c); }
   log(`УРОВЕНЬ ${idx} «${G.cfg.name}», seed ${seed}, хэш карты ${G.map.hash}`);
 }
@@ -120,7 +120,7 @@ function touchObjects(G, p) {
 
 // Отправить игрока в точку (сервер решает: поймали, утонул, застрял)
 function teleport(G, p, pos, reason) {
-  setPos(p, pos);
+  setPos(p, pos); grace(p);
   p.invuln = INVULN;
   p.send({ t: 'caught', x: pos.x, y: pos.y, z: pos.z, reason });
 }
@@ -180,7 +180,7 @@ function checkDefeat(G) {
 function revive(G, p, pos, by) {
   if (!p.dead) return;
   p.dead = false; p.invuln = INVULN;
-  setPos(p, pos);
+  setPos(p, pos); grace(p);
   p.send({ t: 'revived', x: pos.x, y: pos.y, z: pos.z, by });
   broadcast({ t: 'ev', text: `${by} вернул ${p.name} к жизни!` });
   broadcast({ t: 'deadlist', ids: deadIds() });
@@ -274,6 +274,7 @@ const API = {
   startLevel: (idx, seed) => startLevel(idx, seed),
   alarm: (G, x, y, z) => alarm(G, x, y, z),
   addObj: addObjNet,
+  grace: (p, ms) => grace(p, ms),
   catchBy: (G, victim, by) => { if (victim.god) return; killPlayer(G, victim, `Вас поймал(а) ${by.name}`, `его поймал(а) ${by.name}`); },
 };
 
@@ -355,17 +356,57 @@ function tick() {
   broadcast({ t: 's', p: ps, m: ms });
 }
 
+/* ------------------------------ Античит ------------------------------ */
+// Сервер принимает позицию, только если до неё можно было дойти: по горизонтали не быстрее бега
+// (с запасом на лаг, течение, батут), вверх — не быстрее прыжка/лестницы. После телепорта сервером — пауза.
+const RUN_MAX = 6.2, CLIMB_MAX = 9;
+function movementOk(c, x, y, z) {
+  if (!config.ANTICHEAT) return true;
+  const now = Date.now();
+  if (c.tpGrace > now || (c.mods && (c.mods.fly || c.mods.noclip))) return true;
+  const dt = Math.min(2, Math.max(0.05, (now - (c.okT || now)) / 1000));
+  const speed = RUN_MAX * ((c.mods && c.mods.speed) || 1) * 1.45 + 1.5;
+  const dh = Math.hypot(x - c.x, z - c.z), up = y - c.y;
+  const jump = (c.mods && c.mods.jump) || 1;
+  if (dh <= speed * dt + 1.2 && up <= CLIMB_MAX * jump * dt + 1.6) { c.okT = now; c.cheatN = 0; return true; }
+  c.cheatN = (c.cheatN || 0) + 1;
+  if (c.cheatN === 1 || c.cheatN % 20 === 0) log(`античит: ${c.name} — слишком быстро (${dh.toFixed(1)} м за ${dt.toFixed(2)} с), возвращаем`);
+  c.send({ t: 'correct', x: c.x, y: c.y, z: c.z });
+  return false;
+}
+const grace = (c, ms = 1500) => { c.tpGrace = Date.now() + ms; };
+
+/* ---------------- Переподключение: сервер помнит вышедших по нику ---------------- */
+const keep = new Map(); // ник (в нижнем регистре) → { t, level, x, y, z, dead, items, word, deaths }
+function remember(c) {
+  if (!c.joined || !state.G) return;
+  keep.set(c.name.toLowerCase(), { t: Date.now(), level: state.G.idx, seed: state.G.seed, x: c.x, y: c.y, z: c.z, dead: !!c.dead, items: c.items, word: c.word, deaths: c.deaths || 0 });
+}
+function restore(c) {
+  const k = keep.get(c.name.toLowerCase());
+  keep.delete(c.name.toLowerCase());
+  const G = state.G;
+  if (!k || Date.now() - k.t > config.KEEP_STATE * 1000 || k.level !== G.idx || k.seed !== G.seed) return false;
+  setPos(c, { x: k.x, y: k.y, z: k.z });
+  c.items = k.items; c.word = k.word; c.deaths = k.deaths; c.dead = k.dead;
+  return true;
+}
+
 function onJoin(c, msg) {
   c.name = String(msg.name || 'Игрок').replace(/[<>&]/g, '').trim().slice(0, 16) || 'Игрок';
   if (ADM.isBanned(c)) { c.send({ t: 'kicked', text: 'Вы забанены хостом' }); setTimeout(() => c.conn.socket.destroy(), 200); return; }
+  if (joinedCount() >= config.MAX_PLAYERS) { c.send({ t: 'kicked', text: `Сервер заполнен (${config.MAX_PLAYERS} игроков)` }); setTimeout(() => c.conn.socket.destroy(), 200); return; }
   c.mods = ADM.defMods();
   if (msg.token) ADM.auth(c, msg.token); // хост может войти сразу с токеном из ссылки
   c.joined = true;
   resetPlayer(c);
   placeAtSpawn(c);
+  const back = restore(c); // вернулся тот же игрок — на то же место, с теми же предметами
+  grace(c, 3000); c.okT = Date.now();
   c.send(initMsg(c));
   sendSecret(c);
-  broadcast({ t: 'ev', text: `${c.name} зашёл в игру` });
+  broadcast({ t: 'ev', text: back ? `${c.name} вернулся в игру` : `${c.name} зашёл в игру` });
+  if (back && c.dead) { c.send({ t: 'dead', reason: 'Вы вернулись призраком' }); broadcast({ t: 'deadlist', ids: deadIds() }); }
   sendPlayers();
   log(`подключился: ${c.name} (онлайн: ${joinedCount()})`);
 }
@@ -374,7 +415,7 @@ function onLeave(c) {
   const G = state.G;
   if (G && G.ss && SS.isMask(G, c.id)) SS.expose(G, `${c.name} покинул игру`); // жертва ушла — маска не держится
   if (G && c.caged) { const cage = G.objs.find((o) => o.id === c.caged); if (cage) cage.prisoner = 0; }
-  if (G && c.joined) dropCarried(G, c);
+  if (G && c.joined) { dropCarried(G, c); remember(c); }
   if (c.joined) { broadcast({ t: 'ev', text: `${c.name} вышел из игры` }); sendPlayers(); }
   log(`отключился: ${c.name} (онлайн: ${joinedCount()})`);
   if (G && c.joined) { broadcast({ t: 'deadlist', ids: deadIds() }); checkDefeat(G); } // ушёл последний живой — не оставляем призраков одних
@@ -417,6 +458,7 @@ function onMessage(c, msg) {
   if (msg.t === 'p') {
     const x = +msg.x, y = +msg.y, z = +msg.z, r = +msg.r;
     if ([x, y, z, r].every(Number.isFinite)) {
+      if (!movementOk(c, x, y, z)) return; // античит: слишком быстро — вернули игрока на место
       const node = BR.nodeAt(G.map, x, y + 0.1, z);
       // скорость по горизонтали (сглаженная): существа слышат бег
       const now = Date.now(), pdt = (now - (c.posT || now)) / 1000;

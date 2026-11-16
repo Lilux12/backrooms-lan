@@ -51,7 +51,15 @@ async function launchChrome(chrome) {
 }
 
 // Открыть страницу игры и нажать «Играть»; вернуть { page, ev, errors }
-async function openGame(cdpPort, url) {
+// Настройки графики для теста: функциональным тестам хватает «Низкого» (программный рендер в headless медленный),
+// скриншоты — на «Высоком», как увидит игрок
+const PRESET = {
+  low: { preset: 'low', q: 0.6, post: false, bloom: false, shadows: false, pbr: false, fxLights: false, dynres: false, tips: false },
+  high: { preset: 'high', q: 1, post: true, bloom: true, shadows: true, pbr: true, fxLights: true, dynres: false, tips: false },
+};
+const presetScript = (name) => `try { localStorage.setItem('br_set', ${JSON.stringify(JSON.stringify(PRESET[name] || PRESET.low))}); } catch (e) {}`;
+
+async function openGame(cdpPort, url, opts = {}) {
   // каждая игра — в новой вкладке, чтобы состояние прошлой страницы не мешало
   const target = await (await fetch(`http://127.0.0.1:${cdpPort}/json/new?about:blank`, { method: 'PUT' })).json();
   const page = await cdpConnect(target.webSocketDebuggerUrl);
@@ -64,6 +72,7 @@ async function openGame(cdpPort, url) {
     if (m.method === 'Log.entryAdded' && m.params.entry.level === 'error') errors.push(m.params.entry.text + ' ' + (m.params.entry.url || ''));
   });
   await page.send('Runtime.enable'); await page.send('Log.enable'); await page.send('Page.enable');
+  await page.send('Page.addScriptToEvaluateOnNewDocument', { source: presetScript(opts.preset || 'low') });
   await page.send('Page.navigate', { url });
   await sleep(2000);
   const ev = async (expr) => (await page.send('Runtime.evaluate', { expression: expr, returnByValue: true, awaitPromise: true })).result.value;
@@ -79,4 +88,4 @@ async function openGame(cdpPort, url) {
   return { page, ev, errors, realErrors, shot };
 }
 
-module.exports = { findChrome, cdpConnect, launchChrome, openGame, sleep };
+module.exports = { findChrome, cdpConnect, launchChrome, openGame, sleep, presetScript };

@@ -188,3 +188,28 @@ button.small:hover { border-color: var(--y); }
 #game.quarantine { filter: saturate(1.4) hue-rotate(-20deg) brightness(.9); }
 #game.drawings { filter: hue-rotate(35deg) saturate(1.6); }
 #banner .endstats { display: block; margin-top: 14px; font-size: 15px; opacity: .8; letter-spacing: 1px; }
+
+/* F3: отладочный оверлей; субтитры */
+#perf { position: fixed; top: 8px; right: 8px; z-index: 40; display: none; white-space: pre; font: 12px/1.45 "Courier New", monospace; color: #9f9; background: rgba(0,0,0,.6); padding: 6px 9px; border-radius: 4px; pointer-events: none; }
+#subs { position: fixed; bottom: 150px; left: 0; right: 0; text-align: center; z-index: 30; pointer-events: none; font-size: 17px; color: #fff; text-shadow: 0 0 4px #000, 0 0 2px #000; }
+#subs div { margin: 3px auto; display: inline-block; background: rgba(0,0,0,.55); padding: 2px 10px; border-radius: 3px; }
+
+/* настройки: флажки и клавиши */
+.checks { display: grid; grid-template-columns: 1fr 1fr; gap: 4px 12px; margin-top: 10px; font-size: 13px; }
+.checks label { display: flex; align-items: center; gap: 6px; cursor: pointer; }
+.binds { display: grid; grid-template-columns: 1fr auto; gap: 4px 10px; font-size: 13px; }
+.binds button { min-width: 90px; padding: 2px 8px; font: inherit; background: #1d1b14; color: #f2e9b8; border: 1px solid #6b6340; cursor: pointer; }
+.binds button.wait { background: #6b5a14; }
+.lv-row.locked { opacity: .35; }
+.lv-row.pick { cursor: pointer; }
+.lv-row.pick:hover { background: rgba(255,240,150,.12); }
+/* дневник и подсказки новичку */
+#journal { position: absolute; top: 8%; left: 50%; transform: translateX(-50%); width: min(720px, 92vw); max-height: 80vh; overflow: auto; display: none;
+  background: rgba(14,12,8,.94); border: 1px solid #6b6340; padding: 16px 20px; z-index: 25; }
+#journal h3 { margin: 0 0 10px; letter-spacing: 4px; }
+#journal .lvh { margin: 14px 0 6px; color: #e8d070; letter-spacing: 2px; }
+#journal .je { margin: 6px 0; padding: 6px 8px; background: rgba(255,255,255,.04); white-space: pre-wrap; font-size: 13px; line-height: 1.45; }
+#journal .je b { display: block; margin-bottom: 3px; }
+#tip { position: absolute; bottom: 190px; left: 50%; transform: translateX(-50%); max-width: 560px; text-align: center; font-size: 15px; padding: 8px 14px;
+  background: rgba(20,18,10,.85); border: 1px solid #8a7a40; opacity: 0; transition: opacity .6s; pointer-events: none; }
+#tip.on { opacity: 1; }

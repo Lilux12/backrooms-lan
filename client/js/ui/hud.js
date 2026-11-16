@@ -1,6 +1,7 @@
 // HUD: уведомления, баннеры, записки, терминал, цели
 import { $, LEVELS, clamp } from '../core/util.js';
 import { FL, S, keypad, me } from '../core/state.js';
+import { settings } from '../core/settings.js';
 import { curLevel, map } from '../world/world.js';
 import { sfx } from '../audio/audio.js';
 import { nearestUsable, promptFor } from '../game/interact.js';
@@ -16,6 +17,25 @@ export function toast(text, ms = 2500) {
   t.textContent = text; t.classList.add('on');
   clearTimeout(toastTimer);
   toastTimer = setTimeout(() => t.classList.remove('on'), ms);
+}
+// Субтитры важных звуков (если включены): что звучит и с какой стороны
+const SUBS = {
+  caralarm: 'вой автосигнализации', slam: 'хлопнула дверь', door: 'тяжёлая дверь', clang: 'лязг металла', alarm: 'СИРЕНА', roar: 'рёв',
+  shriek: 'визг', lift: 'звонок лифта', radio: 'треск рации', crash: 'грохот', valve: 'скрип вентиля', pump: 'гул насоса', drain: 'шум воды',
+  musicbox: 'музыкальная шкатулка', boom: 'обвал', revive: 'кто-то вернулся', zap: 'треск электричества', steam: 'шипение пара',
+};
+export function caption(name, x, z) {
+  if (!settings.subs || !SUBS[name]) return;
+  let side = '';
+  if (x != null) {
+    const a = Math.atan2(x - me.x, z - me.z), rel = ((a - (me.yaw + Math.PI)) % (Math.PI * 2) + Math.PI * 3) % (Math.PI * 2) - Math.PI;
+    side = Math.abs(rel) < 0.6 ? ' (впереди)' : Math.abs(rel) > 2.5 ? ' (сзади)' : rel > 0 ? ' (слева)' : ' (справа)';
+  }
+  const box = $('subs'), line = document.createElement('div');
+  line.textContent = `[${SUBS[name]}${side}]`;
+  box.append(document.createElement('br'), line);
+  while (box.children.length > 6) box.firstChild.remove();
+  setTimeout(() => { line.remove(); }, 3500);
 }
 export function showBanner(html) { const b = $('banner'); b.innerHTML = html; b.style.display = 'flex'; }
 export function hideBanner() { $('banner').style.display = 'none'; }

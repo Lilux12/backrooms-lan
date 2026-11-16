@@ -12,4 +12,8 @@ module.exports = {
   TEST_NEAR: env.TEST_NEAR || '',
   FORCE_MAP: !!env.FORCE_MAP,
   TEST_HOOKS: !!env.TEST_HOOKS, // отладочные команды для автотестов — в игре не включать
+  // Античит: сервер не принимает перемещения быстрее бега и телепорты (в автотестах с TEST_HOOKS — выключен)
+  ANTICHEAT: env.ANTICHEAT ? env.ANTICHEAT !== '0' : !env.TEST_HOOKS,
+  MAX_PLAYERS: Math.max(1, +env.MAX_PLAYERS || 8), // сколько игроков пускать
+  KEEP_STATE: 120, // секунд: столько сервер помнит вышедшего игрока (переподключение по нику)
 };
