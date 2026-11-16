@@ -14,7 +14,8 @@ const { BR, broadcast, near, patch, alarm, event } = U;
 const { log } = require('../clients');
 
 const PUZZLES = Object.assign({},
-  require('./classic'), require('./parking'), require('./pools'), require('./tunnels'), require('./hospital'), require('./offices'));
+  require('./classic'), require('./parking'), require('./pools'), require('./tunnels'), require('./hospital'), require('./offices'),
+  require('./hotel'));
 
 const FINALE_MUL = 1.15;     // после открытия выхода существа быстрее
 const HINT_AFTER = 300;      // через столько секунд без прогресса — подсказка
@@ -54,6 +55,7 @@ U.hooks.checkSolved = checkSolved;
 function enterCode(G, c, value) {
   const kp = G.objs.find((q) => q.kind === 'keypad');
   if (!kp || G.pz.code.solved || !near(kp, c, 4.5)) return;
+  if (G.cfg.codeNeeds && !G.pz[G.cfg.codeNeeds].powered) { c.send({ t: 'codebad', off: true }); c.send({ t: 'ev', text: 'Терминал обесточен: сначала запустите генератор.' }); return; }
   if (G.cfg.codeNeedsFuses && !G.pz.fuses.solved) { c.send({ t: 'codebad', off: true }); c.send({ t: 'ev', text: 'Терминал обесточен: сначала верните питание щитку.' }); return; }
   if (G.cfg.codePower && !U.anyOn(G, 'gen')) { c.send({ t: 'codebad', off: true }); c.send({ t: 'ev', text: 'Терминал обесточен: запустите генератор (держите его или бегом сюда, пока он работает).' }); return; }
   if (String(value || '') === G.pz.code.digits.join('')) {
@@ -79,11 +81,21 @@ function useCommon(G, c, o) {
     // лифт: следующий этаж вверх (с верхнего — на нижний)
     const cab = G.objs.filter((q) => q.kind === 'lift' && q.shaft === o.shaft).sort((a, b) => a.f - b.f);
     if (o.broken) { c.send({ t: 'ev', text: 'Лифт не работает: кнопки не горят.' }); return true; }
-    const next = cab.find((q) => q.f > o.f && !q.broken) || cab.find((q) => !q.broken && q !== o);
+    let next = cab.find((q) => q.f > o.f && !q.broken) || cab.find((q) => !q.broken && q !== o);
     if (!next) return true;
+    // «Бесконечный отель»: в первую поездку этажи переставляются — лифт привозит не туда
+    if (G.pz.hotel && G.pz.hotel.prank) {
+      G.pz.hotel.prank = false;
+      const wrong = cab.filter((q) => q !== o && q !== next);
+      if (wrong.length) {
+        next = wrong[Math.floor(Math.random() * wrong.length)];
+        c.send({ t: 'event', k: 'glitch', dur: 2 });
+        broadcast({ t: 'ev', text: `${c.name} уехал на лифте… но лифт остановился не там. Этажи переставились.` });
+      }
+    }
     broadcast({ t: 'sfx', name: 'lift', x: o.x, y: o.y, z: o.z });
     hooks.teleport(G, c, { x: next.x, y: next.y, z: next.z }, 'lift');
-    c.send({ t: 'ev', text: `Лифт: этаж ${next.f + 1}` });
+    c.send({ t: 'ev', text: `Лифт: ${(G.cfg.floorNames && G.cfg.floorNames[next.f]) || 'этаж ' + (next.f + 1)}` });
     return true;
   }
   if (o.kind === 'radio') {

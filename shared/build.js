@@ -535,8 +535,38 @@
     (map.lifts || (map.lifts = [])).push({ x, z, floors, d });
   }
 
+  // Лестничная клетка с этажа f0 до f1: марши зигзагом в колонках x и x+1 (2 клетки на этаж),
+  // площадки в рядах z-1 и z+2, вдоль клетки — коридор в колонке x-2 (колонка x-1 — стена-перила).
+  // Занимает x-2..x+1, z-1..z+2; выход — из коридора на север (x-2, z-2), дальше carveConnect.
+  function stairwell(map, x, z, f0, f1) {
+    for (let f = f0; f <= f1; f++) {
+      fillRect(map, f, x - 3, z - 2, x + 2, z + 3, T.WALL, 0, true);
+      fillRect(map, f, x - 2, z - 1, x - 2, z + 2, T.FLOOR);           // коридор вдоль клетки
+      const k = f - f0, even = k % 2 === 0;
+      const hasUp = f < f1, cameUp = f > f0;
+      // площадки: на чётных этажах — ряд z-1, на нечётных — ряд z+2
+      const row = even ? z - 1 : z + 2;
+      fillRect(map, f, x - 1, row, x + 1, row, T.FLOOR);
+      if (cameUp) { // проём над маршем снизу
+        const px = even ? x + 1 : x;
+        map.t[f][idx(px, z)] = T.HOLE; map.t[f][idx(px, z + 1)] = T.HOLE;
+      }
+      if (hasUp) {
+        const sx = even ? x : x + 1, d = even ? 2 : 3;
+        const c0 = even ? idx(sx, z) : idx(sx, z + 1), c1 = even ? idx(sx, z + 1) : idx(sx, z);
+        map.t[f][c0] = T.STAIR; map.a[f][c0] = d;
+        map.t[f][c1] = T.STAIR; map.a[f][c1] = d | 4;
+      }
+    }
+    for (let f = f0; f <= f1; f++) {
+      map.t[f][idx(x - 2, z - 2)] = T.FLOOR;
+      carveConnect(map, f, idx(x - 2, z - 3), roomCells(x - 3, z - 2, x + 2, z + 3));
+      map.t[f][idx(x - 2, z - 3)] = map.t[f][idx(x - 2, z - 3)] === T.WALL ? T.FLOOR : map.t[f][idx(x - 2, z - 3)];
+    }
+  }
+
   Object.assign(BR, {
-    fillRect, reserveRect, room, placeStair, placeLadder, addBlocks, addLift, reserveCell,
+    stairwell, fillRect, reserveRect, room, placeStair, placeLadder, addBlocks, addLift, reserveCell,
     layerFromGrid, carveConnect, addStairs, addLadders, addHoles, addAtrium, addPools, addFlood, addWaterZone,
     addVents, addLow, fixStairs, finalize, isFlat, cellStep: step, connectFloor,
   });
