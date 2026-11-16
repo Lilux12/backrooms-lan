@@ -7,7 +7,7 @@ const state = require('./state');
 const { clients, joinedList, joinedCount, broadcast, sendPlayers, playerList, clearVirtuals, log } = require('./clients');
 const SS = require('./skinstealer');
 const { updateMob, randomFloorFar, inWater } = require('./mobs');
-const { PUZZLES, removeObj, goalLines, sendGoals, enterCode, near, tickWater, PICK_DIST } = require('./puzzles');
+const { PUZZLES, removeObj, goalLines, sendGoals, enterCode, near, tickWater, patch, PICK_DIST } = require('./puzzles');
 const { buildLevel, chasePackPos } = require('./level');
 
 const CATCH_DIST = 1.3;       // существо ловит на таком расстоянии (по горизонтали)
@@ -18,6 +18,7 @@ const EXIT_DIST = 2.6;        // радиус «у двери»
 const EXIT_WAIT = 8;          // сколько ждём остальных, когда кто-то у двери
 const CHASE_WAKE_DIST = 9;    // «Беги!»: стая просыпается, когда игрок отошёл от старта
 const MOB_TYPES = ['stalker', 'runner', 'drowner', 'skinstealer']; // индекс типа уходит клиенту в снапшоте
+const FATAL_FALL = 10;        // падение с такой высоты смертельно
 const CHECK_DIST = 14;        // проверять игрока (пинг, слово, детектор) можно с такого расстояния
 const CHAT_GAP = 0.7;         // не чаще одного сообщения в чат за столько секунд
 const NOISE_DIST = 9;         // шумелка падает на столько метров вперёд
@@ -48,14 +49,16 @@ function startLevel(idx) {
   clearVirtuals();
   const G = state.G = buildLevel(idx, seed, state.TEAM, { forceMap: config.FORCE_MAP });
   G.catchHook = (p, m) => catchPlayer(G, p, m);
-  for (const c of joinedList()) { resetPlayer(c); placeAtSpawn(c); c.send(initMsg(c)); sendSecret(c); }
+  G.stats = { start: Date.now(), deaths: 0, notes: new Set(), exposed: 0 };
+  for (const c of joinedList()) { resetPlayer(c); placeAtSpawn(c); }
+  for (const c of joinedList()) { c.send(initMsg(c)); sendSecret(c); }
   log(`УРОВЕНЬ ${idx} «${G.cfg.name}», seed ${seed}, хэш карты ${G.map.hash}`);
 }
 
 // Новый уровень: клетки, предметы, кодовое слово — заново
 function resetPlayer(c) {
-  c.codeTries = 0; c.caged = 0; c.pingT = 0; c.askBy = 0;
-  c.items = { detector: 0, noise: 0 };
+  c.codeTries = 0; c.caged = 0; c.pingT = 0; c.askBy = 0; c.dead = false;
+  c.items = { detector: 0, noise: 0, medkit: 0 };
   const used = new Set(joinedList().filter((p) => p !== c).map((p) => p.word));
   const free = WORDS.filter((w) => !used.has(w));
   c.word = free[Math.floor(Math.random() * free.length)] || WORDS[0];
@@ -68,7 +71,7 @@ function initMsg(c) {
   return {
     t: 'init', id: c.id, level: G.idx, levels: LEVELS.length, seed: G.seed,
     objs: G.objs, goals: goalLines(G), held: G.pz.fuses.held, upgrades: { map: state.TEAM.map },
-    spawn: { x: c.x, y: c.y, z: c.z }, wl: G.map.wl,
+    spawn: { x: c.x, y: c.y, z: c.z }, wl: G.map.wl, dead: deadIds(),
     players: playerList(),
   };
 }
@@ -90,9 +93,9 @@ function touchObjects(G, p) {
       broadcast({ t: 'pick', id: o.id, kind: 'mapitem', by: p.name });
       broadcast({ t: 'upgrade', what: 'map', by: p.name });
       log(`${p.name} нашёл улучшенную карту`);
-    } else if ((o.kind === 'detector' || o.kind === 'noisemaker') && near(o, p, PICK_DIST)) {
+    } else if ((o.kind === 'detector' || o.kind === 'noisemaker' || o.kind === 'medkit') && near(o, p, PICK_DIST)) {
       removeObj(G, o);
-      if (o.kind === 'detector') p.items.detector = 1; else p.items.noise++;
+      if (o.kind === 'detector') p.items.detector = 1; else if (o.kind === 'medkit') p.items.medkit++; else p.items.noise++;
       p.send({ t: 'items', items: p.items });
       broadcast({ t: 'pick', id: o.id, kind: o.kind, by: p.name });
     } else if (o.kind === 'water' && near(o, p, PICK_DIST)) {
@@ -115,8 +118,8 @@ function teleport(G, p, pos, reason) {
 
 // Существо поймало игрока: телепорт (или рестарт забега на уровне-погоне)
 function catchPlayer(G, p, m0) {
-  teleport(G, p, G.cfg.chase ? G.map.spawn : randomFloorFar(G, m0), m0.type === 'drowner' ? 'drowned' : 'caught');
-  broadcast({ t: 'ev', text: `Существо поймало игрока ${p.name}!` });
+  if (G.cfg.chase || p.god) teleport(G, p, G.cfg.chase ? G.map.spawn : randomFloorFar(G, m0), 'caught');
+  else killPlayer(G, p, m0.type === 'drowner' ? 'Утопленник утащил вас под воду' : 'Вас поймало существо');
   if (G.cfg.chase) { // забег начинается заново: стая возвращается к старту
     G.mobs.forEach((m, i) => { chasePackPos(G, m, i); m.stun = 3.5 + i * 0.6; m.mode = 'chase'; });
   } else if (m0.type === 'drowner') {
@@ -126,6 +129,65 @@ function catchPlayer(G, p, m0) {
     Object.assign(m0.body, { x: away.x, y: away.y, z: away.z, vy: 0 });
     Object.assign(m0, { x: away.x, y: away.y, z: away.z, stun: 4, mode: 'wander', wp: -1, alert: null });
   }
+}
+
+/* ----------------------- Смерть, зрители, воскрешение ----------------------- */
+function deadIds() { return joinedList().filter((p) => p.dead).map((p) => p.id); }
+
+function killPlayer(G, p, reason) {
+  if (p.dead) return;
+  p.dead = true; p.deadAt = Date.now();
+  G.stats.deaths++;
+  p.deaths = (p.deaths || 0) + 1;
+  p.send({ t: 'dead', reason });
+  broadcast({ t: 'ev', text: `${p.name} погиб. ${reason.replace(/^Вас /, '')}`.replace('погиб. поймало существо', 'погиб: его поймало существо') });
+  broadcast({ t: 'deadlist', ids: deadIds() });
+  log(`${p.name} погиб (${reason})`);
+  if (joinedList().every((q) => q.dead)) defeat(G);
+}
+
+function revive(G, p, pos, by) {
+  if (!p.dead) return;
+  p.dead = false; p.invuln = INVULN;
+  setPos(p, pos);
+  p.send({ t: 'revived', x: pos.x, y: pos.y, z: pos.z, by });
+  broadcast({ t: 'ev', text: `${by} вернул ${p.name} к жизни!` });
+  broadcast({ t: 'deadlist', ids: deadIds() });
+  broadcast({ t: 'sfx', name: 'revive' });
+}
+
+// Все погибли: экран поражения со статистикой, потом уровень заново (новый seed)
+function defeat(G) {
+  G.state = 'defeat'; G.timer = 9;
+  const st = G.stats;
+  broadcast({
+    t: 'defeat',
+    stats: {
+      time: Math.round((Date.now() - st.start) / 1000), deaths: st.deaths, notes: st.notes.size, exposed: st.exposed,
+      players: joinedList().map((p) => ({ name: p.name, deaths: p.deaths || 0 })),
+    },
+  });
+  log('ВСЕ ПОГИБЛИ — перезапуск уровня');
+}
+
+// Зрителям — выносливость, батарея и пинг живых
+function spectatorStats(G, dt, players) {
+  G.specT = (G.specT || 0) - dt;
+  if (G.specT > 0) return;
+  G.specT = 0.5;
+  const dead = players.filter((p) => p.dead);
+  if (!dead.length) return;
+  const list = players.filter((p) => !p.dead && !p.caged).map((p) => [p.id, +(p.st || 0).toFixed(2), +(p.bat || 0).toFixed(2), Math.round(p.rtt || 0)]);
+  for (const d of dead) d.send({ t: 'pstats', list, free: !!G.freeCam });
+}
+
+// Замер пинга: раз в 2 секунды
+function pingClients(G, dt, players) {
+  G.rttT = (G.rttT || 0) - dt;
+  if (G.rttT > 0) return;
+  G.rttT = 2;
+  const k = Date.now();
+  for (const p of players) { p.rttK = k; p.send({ t: 'rtt', k }); }
 }
 
 // Кто сидит в клетке — видно только вблизи (сообщение уходит лишь тем, кто рядом)
@@ -176,14 +238,16 @@ function tick() {
   const players = joinedList();
   if (!players.length) return;
 
-  if (G.state === 'done') {
+  if (G.state === 'done' || G.state === 'defeat') {
     G.timer -= dt;
-    if (G.timer <= 0) startLevel(G.idx === LEVELS.length - 1 ? 0 : G.idx + 1);
+    if (G.timer <= 0) startLevel(G.state === 'defeat' ? G.idx : G.idx === LEVELS.length - 1 ? 0 : G.idx + 1);
     return;
   }
+  pingClients(G, dt, players);
+  spectatorStats(G, dt, players);
 
   tickWater(G, dt);
-  const active = players.filter((p) => !p.caged); // в клетке — не участвуют
+  const active = players.filter((p) => !p.caged && !p.dead); // в клетке и мёртвые — не участвуют
   for (const m of G.mobs) updateMob(G, m, dt, active);
   SS.tickPings(G, dt, players);
   if (G.ss) { SS.tickStealer(G, dt, players); SS.detectorBeeps(G, players, dt); cageViews(G, dt, players); }
@@ -224,7 +288,7 @@ function tick() {
 
   // Снапшот: игроки в клетке не видны; двойник в маске — обычная запись игрока (тот же формат)
   const f = (v) => +v.toFixed(2);
-  const ps = active.map((c) => [c.id, f(c.x), f(c.y), f(c.z), f(c.r), c.fl ? 1 : 0, c.crouch ? 1 : 0]);
+  const ps = active.map((c) => [c.id, f(c.x), f(c.y), f(c.z), f(c.r), c.fl ? 1 : 0, c.crouch ? 1 : 0, f(c.pitch || 0)]);
   const mask = G.ss && SS.maskEntry(G, f);
   if (mask) ps.push(mask);
   ps.sort((a, b) => a[0] - b[0]);
@@ -268,6 +332,18 @@ function onMessage(c, msg) {
     if (text) broadcast({ t: 'chat', id: c.id, name: c.name, text });
     return;
   }
+  if (msg.t === 'rtt') { if (msg.k === c.rttK) c.rtt = Date.now() - c.rttK; return; }
+  if (c.dead) { // призрак: смотрит за живыми, ставит метки, больше ничего
+    if (msg.t === 'watch') c.watch = +msg.id;
+    else if (msg.t === 'mark') {
+      const now = Date.now() / 1000;
+      if (now - (c.markT || 0) < 2.5) return;
+      c.markT = now;
+      const x = +msg.x, y = +msg.y, z = +msg.z;
+      if ([x, y, z].every(Number.isFinite)) broadcast({ t: 'mark', x, y, z, by: c.name, ghost: true });
+    }
+    return;
+  }
   if (msg.t === 'p' && c.caged) { const r = +msg.r; if (Number.isFinite(r)) c.r = r; return; } // в клетке — только смотреть
   if (c.caged) return;
   if (msg.t === 'p') {
@@ -280,6 +356,8 @@ function onMessage(c, msg) {
       c.r = r;
       c.fl = !!msg.f;
       c.crouch = !!msg.c;
+      c.pitch = Number.isFinite(+msg.pi) ? Math.max(-1.6, Math.min(1.6, +msg.pi)) : 0;
+      c.st = Math.max(0, Math.min(1, +msg.st || 0)); c.bat = Math.max(0, Math.min(1, +msg.bt || 0));
       if (node >= 0) c.node = node; // в воздухе / на лестнице оставляем последний узел
     }
   } else if (msg.t === 'use') {
@@ -287,6 +365,15 @@ function onMessage(c, msg) {
     if (!o || !near(o, c, USE_DIST)) return;
     if (o.text) { c.send({ t: 'note', title: o.title, text: o.text }); return; } // записки, кассеты, таблицы
     if (o.kind === 'cage') { SS.freeCage(G, c, o); return; }
+    if (o.kind === 'altar') {
+      if (o.used) { c.send({ t: 'ev', text: 'Алтарь уже погас' }); return; }
+      const dead = joinedList().filter((p) => p.dead);
+      if (!dead.length) { c.send({ t: 'ev', text: 'Алтарь тихо гудит. Сейчас некого возвращать.' }); return; }
+      patch(o, { used: true });
+      dead.forEach((p, k) => revive(G, p, { x: o.x + (k % 2 ? 1.2 : -1.2), y: o.y, z: o.z + 1.2 }, c.name));
+      return;
+    }
+    if (o.kind === 'lore') G.stats.notes.add(o.id);
     for (const name of G.cfg.puzzles) if (PUZZLES[name].use && PUZZLES[name].use(G, c, o)) return;
   } else if (msg.t === 'code') {
     if (G.cfg.puzzles.includes('code')) enterCode(G, c, msg.v);
@@ -310,6 +397,7 @@ function onMessage(c, msg) {
       if (v) { const m = G.ss.m; Object.assign(m.body, { x: v.x + 0.5, y: v.y, z: v.z, vy: 0 }); Object.assign(m, { x: v.x + 0.5, y: v.y, z: v.z }); }
     }
     if (msg.cmd === 'freeze-mobs') for (const m of G.mobs) m.stun = 1e9;
+    if (msg.cmd === 'kill') { const v = clientById(+msg.id); if (v) killPlayer(G, v, 'Тест'); }
     if (msg.cmd === 'give' && c.items[msg.item] !== undefined) { c.items[msg.item] = 1; c.send({ t: 'items', items: c.items }); }
     if (msg.cmd === 'ss-unmask' && G.ss && G.ss.state === 'IMPERSONATE') G.ss.t = 999;
   } else if (msg.t === 'hash') {
@@ -318,11 +406,27 @@ function onMessage(c, msg) {
       log(`ВНИМАНИЕ: карта у ${c.name} отличается (хэш ${msg.hash}, на сервере ${G.map.hash})`);
       c.send({ t: 'ev', text: 'Карта не совпадает с сервером — обновите страницу (Ctrl+F5)' });
     }
-  } else if (msg.t === 'drown' || msg.t === 'stuck') {
-    // утонул или застрял — безопасная точка
-    const pos = msg.t === 'stuck' ? G.map.spawn : randomFloorFar(G, c);
-    teleport(G, c, pos, msg.t);
-    if (msg.t === 'drown') broadcast({ t: 'ev', text: `${c.name} захлебнулся и очнулся в другом месте` });
+  } else if (msg.t === 'drown') {
+    if (G.cfg.chase || c.god) teleport(G, c, randomFloorFar(G, c), 'drown');
+    else killPlayer(G, c, 'Вы захлебнулись');
+  } else if (msg.t === 'fall') {
+    const h = +msg.h;
+    if (Number.isFinite(h) && h > FATAL_FALL && !G.cfg.chase && !c.god) killPlayer(G, c, 'Падение с большой высоты');
+  } else if (msg.t === 'stuck') {
+    teleport(G, c, G.map.spawn, 'stuck');
+  } else if (msg.t === 'revive') {
+    // аптечка: поднять того, кто погиб раньше всех
+    if (!c.items.medkit) return;
+    const dead = joinedList().filter((p) => p.dead).sort((a, b) => a.deadAt - b.deadAt)[0];
+    if (!dead) { c.send({ t: 'ev', text: 'Некого воскрешать' }); return; }
+    c.items.medkit--; c.send({ t: 'items', items: c.items });
+    revive(G, dead, { x: c.x, y: c.y, z: c.z }, c.name);
+  } else if (msg.t === 'mark') {
+    const now = Date.now() / 1000;
+    if (now - (c.markT || 0) < 2.5) return;
+    c.markT = now;
+    const x = +msg.x, y = +msg.y, z = +msg.z, kind = ['here', 'danger', 'item'].includes(msg.kind) ? msg.kind : 'here';
+    if ([x, y, z].every(Number.isFinite)) broadcast({ t: 'mark', x, y, z, by: c.name, kind });
   }
 }
 

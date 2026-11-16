@@ -90,7 +90,7 @@ async function main() {
       assert.strictEqual(JSON.stringify(A.players), before, `${tag}: список игроков изменился`);
       for (const m of after.filter((q) => q.t === 's')) {
         assert(m.p.some((e) => e[0] === C.id), `${tag}: жертва пропала из снапшота`);
-        assert(m.p.every((e) => e.length === 7), `${tag}: формат записи игрока отличается`);
+        assert(m.p.every((e) => e.length === m.p[0].length && e.length === 8), `${tag}: формат записи игрока отличается`);
         assert(m.m.every((e) => e[6] !== 3), `${tag}: двойник виден в списке существ`);
       }
       return posOf(A, C.id);
@@ -180,7 +180,7 @@ async function main() {
     await sleep(300);
     const fake = S.players.find((p) => p.id !== S.id);
     assert(join.text.startsWith(fake.name), 'имя «нового игрока» не совпадает');
-    assert(S.snap.p.some((e) => e[0] === fake.id && e.length === 7), 'фальшивый игрок не в снапшоте');
+    assert(S.snap.p.some((e) => e[0] === fake.id && e.length === 8), 'фальшивый игрок не в снапшоте');
     assert(S.snap.m.every((e) => e[6] !== 3), 'двойник виден как существо');
     console.log(`  соло: «${fake.name}» зашёл в игру — неотличим от игрока`);
   } finally { S.close(); srv2.proc.kill(); }

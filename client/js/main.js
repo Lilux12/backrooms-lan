@@ -16,19 +16,21 @@ import { placeMe, updateBattery, updateCamera, updateMovement } from './game/pla
 // Модуль ввода вешает обработчики клавиш при загрузке.
 import './game/input.js';
 import { fadeChat, tickExpose } from './game/social.js';
+import { tickMarks, updateSpectator } from './game/spectator.js';
 
 let last = performance.now();
 
 // доступ для отладки и тестов: состояние, карта, телепорт камеры
 window.__br = {
   me, FL, UP, S, keys: () => keys, remotes: () => remotes.size, map: () => map,
+  cam: () => ({ x: camera.position.x, y: camera.position.y, z: camera.position.z }),
   tp(x, y, z, yaw = me.yaw, pitch = 0) { placeMe(x, y, z); me.yaw = yaw; me.pitch = pitch; },
 };
 
 function update(dt) {
   S.time += dt;
-  const { moving, sprint } = updateMovement(dt);
-  updateCamera(dt, moving, sprint);
+  let moving = false, sprint = false;
+  if (!updateSpectator(dt)) ({ moving, sprint } = updateMovement(dt), updateCamera(dt, moving, sprint));
   updateRemotes(dt);
   const mobDist = updateMobs(dt);
   animateObjects(dt);
@@ -41,6 +43,7 @@ function update(dt) {
   updateAudio(dt, prox, !!(me.body && me.body.underwater));
   updateHud(dt, prox);
   tickExpose(dt);
+  tickMarks(dt);
   fadeChat();
 }
 

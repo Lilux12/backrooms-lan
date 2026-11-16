@@ -7,6 +7,9 @@ import { remotes } from '../entities/avatars.js';
 import { mobEnts } from '../entities/mobs.js';
 import { sfx } from '../audio/audio.js';
 import { toast } from './hud.js';
+import { activeMarks, spec } from '../game/spectator.js';
+import { sendNet } from '../net/net.js';
+import { renderer } from '../render/scene.js';
 
 /* ============================ Карты ============================ */
 const mm = $('minimap'), mg = mm.getContext('2d');
@@ -19,9 +22,23 @@ const OBJ_DOT = { water: '#7fe8ff', fuse: '#ffb030', box: '#ffffff', keypad: '#f
 
 
 export function toggleBigMap() {
-  if (!UP.map) { toast('У вас нет улучшенной карты. Она может лежать где-то на 1 уровне.', 3200); return; }
+  if (!UP.map && !spec.dead) { toast('У вас нет улучшенной карты. Она может лежать где-то на 1 уровне.', 3200); return; }
   S.bigOn ? closeBigMap() : openBigMap();
+  // призраку нужен курсор, чтобы ставить метки кликом
+  if (spec.dead && S.bigOn) { S.ghostCursor = true; document.exitPointerLock(); }
 }
+// Клик по карте призраком — метка-подсказка для живых
+bigc.addEventListener('click', (e) => {
+  if (!spec.dead || !S.bigOn || !map) return;
+  const rect = bigc.getBoundingClientRect();
+  const cell = bigc.width / N;
+  const x = (e.clientX - rect.left) / rect.width * bigc.width / cell * TILE, z = (e.clientY - rect.top) / rect.height * bigc.height / cell * TILE;
+  const f = myFloor();
+  sendNet({ t: 'mark', x, y: f * map.FH, z });
+  closeBigMap();
+  S.ghostCursor = false;
+  renderer.domElement.requestPointerLock();
+});
 function openBigMap() {
   S.bigOn = true; $('bigmap').style.display = 'flex'; $('bigLv').textContent = LEVELS[curLevel].name.toUpperCase();
   const sz = Math.floor(Math.min(innerWidth * 0.92, innerHeight * 0.78));
@@ -86,6 +103,16 @@ function drawCell(ctx, f, i, x, y, w, pal) {
 const myFloor = () => BR.floorOf(map, me.x, me.y + 0.1, me.z);
 const floorAlpha = (y) => (BR.floorOf(map, me.x, (y || 0) + 0.1, me.z) === myFloor() || Math.abs((y || 0) - me.y) < 1.5 ? 1 : 0.3);
 
+// Метки «сюда/опасность» и подсказки призраков
+function markDots(ctx, X, Y, r) {
+  for (const k of activeMarks()) {
+    ctx.globalAlpha = k.ghost ? 0.5 + 0.5 * Math.abs(Math.sin(k.t * 6)) : 1;
+    ctx.strokeStyle = '#' + k.col.toString(16).padStart(6, '0'); ctx.lineWidth = 2.5;
+    ctx.beginPath(); ctx.arc(X(k.x), Y(k.z), r + Math.sin(k.t * 5) * 1.5, 0, 7); ctx.stroke();
+  }
+  ctx.globalAlpha = 1;
+}
+
 export function drawMinimap() {
   if (!S.mmOn || !map) return;
   const pal = MAPPAL[LEVELS[curLevel].style] || MAPPAL.yellow;
@@ -109,6 +136,7 @@ export function drawMinimap() {
     mg.fillStyle = '#6fa8ff'; mg.beginPath(); mg.arc(X(r.x), Y(r.z), 3.8, 0, 7); mg.fill();
     mg.globalAlpha = 1;
   }
+  markDots(mg, X, Y, 4);
   mg.save(); mg.translate(s / 2, s / 2); mg.rotate(-me.yaw);
   if (FL.on) { mg.fillStyle = 'rgba(255,240,170,.16)'; mg.beginPath(); mg.moveTo(0, 0); mg.arc(0, 0, s * 0.45, -Math.PI / 2 - 0.5, -Math.PI / 2 + 0.5); mg.closePath(); mg.fill(); }
   mg.fillStyle = '#fff'; mg.beginPath(); mg.moveTo(0, -7); mg.lineTo(5, 6); mg.lineTo(-5, 6); mg.closePath(); mg.fill();
@@ -141,6 +169,7 @@ export function drawBigMap() {
     bg.fillStyle = '#fff'; bg.fillText(r.name, X(r.x), Y(r.z) - cell * 0.5);
   }
   bg.globalAlpha = 1;
+  markDots(bg, X, Y, Math.max(5, cell * 0.35));
   bg.save(); bg.translate(X(me.x), Y(me.z)); bg.rotate(-me.yaw);
   bg.fillStyle = '#fff'; bg.strokeStyle = '#000'; bg.lineWidth = 2;
   const a = Math.max(7, cell * 0.45);

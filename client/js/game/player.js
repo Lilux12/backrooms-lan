@@ -67,6 +67,7 @@ export function updateMovement(dt) {
   const res = BR.moveBody(map, b, inp, dt);
   pushOutObstacles(b);
   me.x = b.x; me.y = b.y; me.z = b.z;
+  if (res.landed > 1.2) sendNet({ t: 'fall', h: +res.landed.toFixed(2) }); // сервер решит, смертельно ли
   if (res.landed > HARD_FALL) {
     me.stunned = 1.2; me.shake = 0.5;
     sfx.thump(1.2); sfx.caught();

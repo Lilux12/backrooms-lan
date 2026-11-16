@@ -67,6 +67,7 @@ function expose(G, why) {
   broadcast({ t: 'exposed', id: d.id, x: ss.m.x, y: ss.m.y, z: ss.m.z });
   broadcast({ t: 'ev', text: `Это был не ${d.name}! ДВОЙНИК! (${why})` });
   broadcast({ t: 'sfx', name: 'shriek' });
+  if (G.stats) G.stats.exposed++;
   setState(G, 'EXPOSED', T.flee);
   log(`двойник разоблачён: ${why}`);
 }
@@ -359,7 +360,7 @@ const nameOf = (G, id, clientById) => (isMask(G, id) ? G.ss.disguise.name : (cli
 function maskEntry(G, f) {
   const ss = G.ss;
   if (!ss || !ss.disguise) return null;
-  return [ss.disguise.id, f(ss.m.x), f(ss.m.y), f(ss.m.z), f(ss.m.r + Math.PI), ss.fl ? 1 : 0, 0];
+  return [ss.disguise.id, f(ss.m.x), f(ss.m.y), f(ss.m.z), f(ss.m.r + Math.PI), ss.fl ? 1 : 0, 0, 0];
 }
 // Видимое существо (только после разоблачения)
 function monsterEntry(G, f, typeIdx) {

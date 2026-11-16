@@ -36,8 +36,9 @@ async function main() {
     pos = { x: far.x, y: far.y, z: far.z };
     await sleep(500);
     send({ t: 'dbg', cmd: 'ss-victim', id: myId });
-    await sleep(1500);
-    assert(await g.ev(`getComputedStyle(document.getElementById('cagedBox')).display === 'flex'`), 'экран клетки не показан');
+    let caged = false;
+    for (let k = 0; k < 40 && !caged; k++) { await sleep(200); caged = await g.ev(`getComputedStyle(document.getElementById('cagedBox')).display === 'flex'`); }
+    assert(caged, 'экран клетки не показан');
     send({ t: 'dbg', cmd: 'ss-unmask' });
     // чат из клетки
     await g.page.send('Input.dispatchKeyEvent', { type: 'keyDown', code: 'Enter', key: 'Enter' });

@@ -11,6 +11,7 @@ import { sfx } from '../audio/audio.js';
 import { toast } from '../ui/hud.js';
 import { sendNet } from '../net/net.js';
 import { placeMe } from './player.js';
+import { spec } from './spectator.js';
 
 export const social = { word: '', items: { detector: 0, noise: 0 }, caged: 0, pinged: 0, asked: false, chatOpen: false };
 
@@ -77,7 +78,7 @@ function targetOrToast(what) {
 export function onSocialKey(code) {
   if (social.asked) return false;
   if (code === 'KeyT' || code === 'Enter') { openChat(); return true; }
-  if (social.caged) return false;
+  if (social.caged || spec.dead) return false;
   if (code === 'KeyG') {
     if (social.pinged) { sendNet({ t: 'pong' }); social.pinged = 0; $('pinged').style.display = 'none'; myGesture(); return true; }
     const id = targetOrToast('проверить его жестом'); if (id != null) { sendNet({ t: 'ping', id }); sfx.click(); }
@@ -157,7 +158,7 @@ $('askInput').addEventListener('keydown', (e) => {
 function renderSecret() {
   const it = social.items;
   $('secret').innerHTML = `Ваше кодовое слово: <b>${social.word}</b>` +
-    (it.detector ? ' · <kbd>V</kbd> детектор' : '') + (it.noise ? ` · <kbd>B</kbd> шумелки: ${it.noise}` : '');
+    (it.detector ? ' · <kbd>V</kbd> детектор' : '') + (it.noise ? ` · <kbd>B</kbd> шумелки: ${it.noise}` : '') + (it.medkit ? ` · <kbd>R</kbd> аптечки: ${it.medkit}` : '');
 }
 
 // Разоблачение: вспышка и «растворение» на месте двойника

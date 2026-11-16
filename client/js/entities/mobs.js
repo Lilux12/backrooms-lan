@@ -2,7 +2,7 @@
 import * as THREE from 'three';
 import { clamp, lerpAngle } from '../core/util.js';
 import { S, me } from '../core/state.js';
-import { scene } from '../render/scene.js';
+import { camera, scene } from '../render/scene.js';
 import { basic, glowSprite, lam } from '../render/textures.js';
 import { limb } from './avatars.js';
 
@@ -137,7 +137,7 @@ export function updateMobs(dt) {
     }
     mo.parts.legL.rotation.x = -sw * 0.8; mo.parts.legR.rotation.x = sw * 0.8;
     mo.group.visible = !mo.stun;
-    if (!mo.stun) mobDist = Math.min(mobDist, Math.hypot(mo.x - me.x, (mo.y - me.y) * 2, mo.z - me.z));
+    if (!mo.stun) mobDist = Math.min(mobDist, Math.hypot(mo.x - camera.position.x, (mo.y + 1.6 - camera.position.y) * 2, mo.z - camera.position.z)); // слышно «ушами» камеры (и зрителю)
   }
   return mobDist;
 }

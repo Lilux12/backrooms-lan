@@ -52,6 +52,12 @@ function buildLevel(idx, seed, team, opts = {}) {
     BR.pickSpots(map, rnd, cfg.items.noisemaker || 0, { minDist: 0.1 * maxD, minSep: 6 }).forEach((p) => add('noisemaker', { x: p.x, y: p.y, z: p.z }));
   }
   if (cfg.skinstealer) SS.placeCages(G, add, rnd);
+  // Воскрешение: аптечки и алтарь на каждом уровне (кроме погони)
+  if (!cfg.chase) {
+    BR.pickSpots(map, rnd, cfg.medkits == null ? 2 : cfg.medkits, { minDist: 0.25 * maxD, minSep: 10 }).forEach((p) => add('medkit', { x: p.x, y: p.y, z: p.z }));
+    const al = BR.pickSpots(map, rnd, 1, { minDist: 0.45 * maxD })[0];
+    if (al) add('altar', { x: al.x, y: al.y, z: al.z, used: false });
+  }
 
   const list = cfg.mobList || [{ type: cfg.mobType, count: cfg.mobs }];
   if (cfg.chase) {

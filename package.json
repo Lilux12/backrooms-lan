@@ -5,7 +5,7 @@
   "main": "server/index.js",
   "scripts": {
     "start": "node server/index.js",
-    "test": "node tests/verify-levels.js 60 && node tests/mobs-pathing.js && node tests/drowner.js && node tests/smoke-server.js && node tests/bot-playthrough.js && node tests/skinstealer.js && node tests/smoke-browser.js && node tests/browser-stealer.js",
+    "test": "node tests/verify-levels.js 60 && node tests/mobs-pathing.js && node tests/drowner.js && node tests/smoke-server.js && node tests/bot-playthrough.js && node tests/skinstealer.js && node tests/death.js && node tests/smoke-browser.js && node tests/browser-stealer.js && node tests/browser-spectator.js",
     "verify": "node tests/verify-levels.js 300"
   },
   "repository": {

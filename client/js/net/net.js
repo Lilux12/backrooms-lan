@@ -11,6 +11,7 @@ import { closeKeypad, hideBanner, renderGoals, setStatus, showBanner, showLevelT
 import { beginPlay } from '../ui/menu.js';
 import { placeMe } from '../game/player.js';
 import { onSocialNet, social } from '../game/social.js';
+import { onSpectatorNet, spec } from '../game/spectator.js';
 import { closeBigMap } from '../ui/maps.js';
 
 /* ============================== Сеть ============================== */
@@ -36,7 +37,7 @@ export const sendNet = (o) => { if (ws && ws.readyState === 1) ws.send(JSON.stri
 
 
 function onNet(m) {
-  if (onSocialNet(m)) return;
+  if (onSocialNet(m) || onSpectatorNet(m)) return;
   switch (m.t) {
     case 'init': {
       S.myId = m.id;
@@ -50,6 +51,7 @@ function onNet(m) {
       if (LEVELS[m.level].chase) FL.on = false;
       placeMe(m.spawn.x, m.spawn.y, m.spawn.z); me.yaw = Math.PI * 0.5; me.pitch = 0;
       social.caged = 0; $('cagedBox').style.display = 'none';
+      spec.dead = false; spec.free = false; spec.watch = null; spec.deadIds = new Set(m.dead || []);
       me.stamina = 1; me.exhausted = false;
       S.goalLines = m.goals; S.heldFuses = m.held;
       closeKeypad(); $('note').style.display = 'none';
@@ -62,10 +64,10 @@ function onNet(m) {
     }
     case 'players': setPlayers(m.list); break;
     case 's': {
-      for (const [id, x, y, z, r, fl, cr] of m.p) {
+      for (const [id, x, y, z, r, fl, cr, pi] of m.p) {
         const rem = remotes.get(id);
         if (!rem) continue;
-        rem.tx = x; rem.ty = y; rem.tz = z; rem.tr = r; rem.fl = !!fl; rem.crouch = !!cr;
+        rem.tx = x; rem.ty = y; rem.tz = z; rem.tr = r; rem.fl = !!fl; rem.crouch = !!cr; rem.pitch = pi || 0;
         if (!rem.seen) { rem.x = x; rem.y = y; rem.z = z; rem.r = r; rem.seen = true; rem.mesh.visible = true; }
         rem.snapT = performance.now();
       }
@@ -138,5 +140,5 @@ function onNet(m) {
 }
 
 setInterval(() => {
-  if (S.joined) sendNet({ t: 'p', x: +me.x.toFixed(2), y: +me.y.toFixed(2), z: +me.z.toFixed(2), r: +me.yaw.toFixed(3), f: FL.on ? 1 : 0, c: me.body && me.body.crouch ? 1 : 0 });
+  if (S.joined && !spec.dead) sendNet({ t: 'p', x: +me.x.toFixed(2), y: +me.y.toFixed(2), z: +me.z.toFixed(2), r: +me.yaw.toFixed(3), pi: +me.pitch.toFixed(2), f: FL.on ? 1 : 0, c: me.body && me.body.crouch ? 1 : 0, st: +me.stamina.toFixed(2), bt: +FL.bat.toFixed(2) });
 }, 50);

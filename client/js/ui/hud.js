@@ -5,6 +5,7 @@ import { curLevel, map } from '../world/world.js';
 import { sfx } from '../audio/audio.js';
 import { nearestUsable, promptFor } from '../game/interact.js';
 import { drawBigMap, drawMinimap } from './maps.js';
+import { spec } from '../game/spectator.js';
 
 export function setStatus(t) { $('status').textContent = t; }
 
@@ -66,6 +67,7 @@ export function updateHud(dt, prox) {
   if (u) { pr.innerHTML = promptFor(u); pr.classList.add('on'); } else pr.classList.remove('on');
 
   $('danger').style.opacity = String(clamp(prox * 1.3 - 0.25, 0, 0.9) * (0.7 + 0.3 * Math.sin(S.time * 6)));
+  $('bottom').style.display = spec.dead ? 'none' : 'block'; // у призрака своих сил нет
   $('stamina').style.width = `${me.stamina * 100}%`;
   $('stamina').style.background = me.exhausted ? '#c0503a' : '#e8dc86';
   $('stTxt').textContent = LEVELS[curLevel].infStamina ? '∞' : '';

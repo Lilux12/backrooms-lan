@@ -3,11 +3,12 @@ import { $ } from '../core/util.js';
 import { S, keypad, keys } from '../core/state.js';
 import { sfx, tone } from '../audio/audio.js';
 import { sendNet } from '../net/net.js';
-import { closeKeypad, updateKeypad } from '../ui/hud.js';
+import { closeKeypad, toast, updateKeypad } from '../ui/hud.js';
 import { useNearest } from './interact.js';
 import { toggleBigMap } from '../ui/maps.js';
 import { toggleTorch } from './player.js';
 import { onSocialKey, social } from './social.js';
+import { onSpectatorKey, placeMarkAhead, spec } from './spectator.js';
 
 addEventListener('keydown', (e) => {
   if (keypad.open) {
@@ -21,12 +22,18 @@ addEventListener('keydown', (e) => {
     return;
   }
   if (social.chatOpen || social.asked) return;
-  if (S.joined && (S.locked || social.caged) && !e.repeat && onSocialKey(e.code)) { e.preventDefault(); return; }
+  if (S.joined && S.locked && !e.repeat && onSpectatorKey(e.code)) { e.preventDefault(); return; }
+  if (S.joined && (S.locked || social.caged || spec.dead) && !e.repeat && onSocialKey(e.code)) { e.preventDefault(); return; }
+  if (S.joined && S.locked && !e.repeat && !spec.dead && !social.caged) {
+    if (e.code === 'KeyZ') { placeMarkAhead('here'); return; }
+    if (e.code === 'KeyX') { placeMarkAhead('danger'); return; }
+    if (e.code === 'KeyR') { if (social.items.medkit) sendNet({ t: 'revive' }); else toast('Нужна аптечка — с ней можно вернуть погибшего', 2000); return; }
+  }
   keys[e.code] = true;
   if (e.code === 'KeyH') { S.mmOn = !S.mmOn; $('minimapWrap').style.display = S.mmOn ? 'block' : 'none'; }
-  if (e.code === 'KeyF' && S.joined && S.locked && !e.repeat) toggleTorch();
+  if (e.code === 'KeyF' && S.joined && S.locked && !e.repeat && !spec.dead) toggleTorch();
   if (e.code === 'KeyM' && S.joined && S.locked && !e.repeat) toggleBigMap();
-  if (e.code === 'KeyE' && S.joined && S.locked) {
+  if (e.code === 'KeyE' && S.joined && S.locked && !spec.dead) {
     if ($('note').style.display === 'block') $('note').style.display = 'none'; else useNearest();
   }
   if (['Space', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(e.code)) e.preventDefault();
