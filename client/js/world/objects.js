@@ -199,7 +199,7 @@ export function refreshObj(rec) {
 // Покачивание подбираемых предметов и мигание экрана терминала
 export function animateObjects(dt) {
   for (const rec of objs.values()) {
-    if (rec.bob) { rec.group.position.y = (rec.o.kind === 'fuse' ? 0.9 : 1.0) + Math.sin(S.time * 2 + rec.o.x) * 0.1; rec.group.rotation.y += dt * 1.2; }
+    if (rec.bob) { rec.group.position.y = rec.baseY + (rec.o.kind === 'fuse' ? 0.9 : 1.0) + Math.sin(S.time * 2 + rec.o.x) * 0.1; rec.group.rotation.y += dt * 1.2; }
     if (rec.o.kind === 'keypad' && !S.goalLines.some((l) => l.startsWith('Код') && l.includes('✔'))) rec.parts.screen.visible = Math.sin(S.time * 4) > -0.3;
   }
 }

@@ -1,399 +1,250 @@
-// Общий код карт и уровней: работает и в браузере (window.BR), и на сервере (require).
-// Уровень целиком определяется парой (seed, номер уровня), поэтому у всех игроков карта одинаковая.
+// Уровни кампании и генерация карты по (seed, номер уровня).
+// Уровень целиком определяется этой парой, поэтому у всех игроков и у сервера карта одинаковая
+// (это проверяется хэшем при подключении).
 (function (root) {
   'use strict';
+  const isNode = typeof module === 'object' && module.exports;
+  const BR = isNode ? (require('./core.js'), require('./world.js'), require('./gen2d.js'), require('./build.js')) : root.BR;
+  const { TILE, N, NN, T, D4, mulberry32, shuffle, cellX, cellZ, inner } = BR;
 
-  const TILE = 4;     // размер клетки в метрах
-  const N = 45;       // карта N x N клеток
-  const WALL_H = 3.2; // высота стен по умолчанию
-  const D4 = [[1, 0], [-1, 0], [0, 1], [0, -1]];
-
-  // Описание кампании. Головоломки: fuses (предохранители), code (код), plates (две плиты), levers (рычаги).
+  /* ------------------------------ Кампания ------------------------------
+   Поля уровня:
+     F, FH          — число этажей и высота этажа (м)
+     floors[]       — планировка каждого этажа: { gen, p } (см. gen2d.js)
+     spawnF, exitF  — этаж старта и этаж выхода
+     build(map, rnd, reserve) — вертикальные связи и особенности (build.js)
+     mobs, mobType, mobSpeed, water (бутылки), mapChance, puzzles[], chase, infStamina
+  */
   const LEVELS = [
     {
-      name: 'Жёлтые комнаты', style: 'yellow', gen: 'maze', wallH: 3.2, mobs: 1, mobType: 'stalker', mobSpeed: 1.0, water: 4, mapChance: 0.7,
-      p: { straight: 0, rooms: 16, roomMin: 3, roomMax: 8, loops: 140, pillars: true },
+      name: 'Жёлтые комнаты', style: 'yellow', F: 2, FH: 3.4, spawnF: 1, exitF: 1,
+      floors: [
+        { gen: 'maze', p: { straight: 0.55, rooms: 8, roomMin: 3, roomMax: 5, loops: 200, pillars: false } }, // нижний этаж: мокрый ковёр
+        { gen: 'maze', p: { straight: 0, rooms: 16, roomMin: 3, roomMax: 8, loops: 140, pillars: true } },
+      ],
+      build(map, rnd, used) {
+        BR.addStairs(map, rnd, 0, 3, used);
+        BR.addLadders(map, rnd, 0, 3, used);
+        BR.addHoles(map, rnd, 1, 7, 2);
+        BR.addLow(map, rnd, 1, 7, 5);
+        BR.addFlood(map, rnd, 0, 60, 0.25);
+      },
+      mobs: 1, mobType: 'stalker', mobSpeed: 1.0, water: 4, mapChance: 0.7,
       puzzles: ['fuses'], fuses: 3,
-      intro: 'Электричество отключено. Найдите 3 предохранителя и вставьте их в щиток — дверь выхода оживёт. Где-то здесь может валяться улучшенная карта.',
+      intro: 'Электричество отключено. Найдите 3 предохранителя и вставьте их в щиток — дверь выхода оживёт. Осторожно: пол местами провален, внизу — мокрые коридоры.',
     },
     {
-      name: 'Подземная парковка', style: 'concrete', gen: 'halls', wallH: 3.6, mobs: 1, mobType: 'stalker', mobSpeed: 1.05, water: 3, mapChance: 0.35,
-      p: { walls: 14, blocks: 26 },
+      name: 'Подземная парковка', style: 'concrete', F: 2, FH: 3.8, spawnF: 1, exitF: 0,
+      floors: [{ gen: 'halls', p: { walls: 12, blocks: 30 } }, { gen: 'halls', p: { walls: 14, blocks: 26 } }],
+      build(map, rnd, used) {
+        BR.addStairs(map, rnd, 0, 4, used);
+        BR.addLadders(map, rnd, 0, 1, used);
+        BR.addFlood(map, rnd, 0, 140, 0.45);
+      },
+      mobs: 1, mobType: 'stalker', mobSpeed: 1.05, water: 3, mapChance: 0.35,
       puzzles: ['code'],
-      intro: 'Код от шлагбаума нацарапан на стенах. Найдите все 4 цифры и введите код на терминале у выхода. Включите фонарь (F) — здесь темно.',
+      intro: 'Код от шлагбаума нацарапан на стенах обоих ярусов. Найдите все 4 цифры и введите код на терминале у выхода на нижнем ярусе. Включите фонарь (F) — здесь темно.',
     },
     {
-      name: 'Технические тоннели', style: 'tunnel', gen: 'maze', wallH: 2.7, mobs: 1, mobType: 'stalker', mobSpeed: 1.1, water: 3,
-      p: { straight: 0.82, rooms: 4, roomMin: 3, roomMax: 4, loops: 22, pillars: false },
+      name: 'Технические тоннели', style: 'tunnel', F: 3, FH: 2.9, spawnF: 2, exitF: 0,
+      floors: [
+        { gen: 'maze', p: { straight: 0.82, rooms: 4, roomMin: 3, roomMax: 4, loops: 22, pillars: false } },
+        { gen: 'maze', p: { straight: 0.85, rooms: 3, roomMin: 3, roomMax: 4, loops: 18, pillars: false } },
+        { gen: 'maze', p: { straight: 0.8, rooms: 4, roomMin: 3, roomMax: 4, loops: 22, pillars: false } },
+      ],
+      build(map, rnd, used) {
+        for (let f = 0; f < 2; f++) { BR.addLadders(map, rnd, f, 4, used); BR.addStairs(map, rnd, f, 1, used); }
+        for (let f = 0; f < 3; f++) BR.addVents(map, rnd, f, 8);
+        BR.addHoles(map, rnd, 2, 3, 1);
+        BR.addHoles(map, rnd, 1, 2, 1);
+      },
+      mobs: 1, mobType: 'stalker', mobSpeed: 1.1, water: 3,
       puzzles: ['plates'],
-      intro: 'Дверь откроется, только когда нажаты ОБЕ плиты. Каждая держится около 20 секунд — успейте добежать до второй.',
+      intro: 'Дверь внизу откроется, только когда нажаты ОБЕ плиты. Каждая держится около 20 секунд. Тоннели связаны колодцами с лестницами, а через лазы (C — ползти) можно срезать путь.',
     },
     {
-      name: 'Бассейны', style: 'pool', gen: 'rooms', wallH: 3.8, mobs: 1, mobType: 'stalker', mobSpeed: 1.15, water: 3,
-      p: { extra: 14, doorW: 2, pillar: 0.5, cubicle: 0 },
+      name: 'Бассейны', style: 'pool', F: 2, FH: 4.2, spawnF: 1, exitF: 0,
+      floors: [
+        { gen: 'rooms', p: { extra: 16, doorW: 2, pillar: 0, cubicle: 0 } },
+        { gen: 'rooms', p: { extra: 12, doorW: 2, pillar: 0.5, cubicle: 0 } },
+      ],
+      build(map, rnd, used) {
+        BR.addPools(map, rnd, 0, 6, { min: 2, max: 3, depth: 2.5 });
+        BR.addStairs(map, rnd, 0, 3, used);
+        BR.addAtrium(map, rnd, 0, 5);
+        BR.addHoles(map, rnd, 1, 3, 2);
+      },
+      mobs: 1, mobType: 'stalker', mobSpeed: 1.15, water: 3,
       puzzles: ['levers'],
-      intro: 'Найдите записку с подсказкой и потяните 4 рычага в правильном порядке. Ошибка включит сирену!',
+      intro: 'Найдите записку с подсказкой и потяните 4 рычага в правильном порядке. Ошибка включит сирену! В бассейнах можно плавать (Пробел — вверх, C — нырнуть), следите за воздухом.',
     },
     {
-      name: 'Беги!', tag: 'LEVEL !', style: 'run', gen: 'run', wallH: 3.4, mobs: 3, mobType: 'runner', mobSpeed: 1.35, water: 0,
-      chase: true, infStamina: true, p: {}, puzzles: [],
+      name: 'Беги!', tag: 'LEVEL !', style: 'run', F: 1, FH: 3.4, spawnF: 0, exitF: 0,
+      floors: [{ gen: 'run' }],
+      mobs: 3, mobType: 'runner', mobSpeed: 1.35, water: 0,
+      chase: true, infStamina: true, puzzles: [],
       intro: 'Дверь в конце коридора уже открыта. Как только вы выйдете из укрытия, за вами бросится стая. Бегите, огибайте мебель, не останавливайтесь. Выносливость здесь не кончается.',
     },
     {
-      name: 'Офисы', style: 'office', gen: 'rooms', wallH: 3.0, mobs: 2, mobType: 'stalker', mobSpeed: 1.1, water: 4,
-      p: { extra: 10, doorW: 1, pillar: 0, cubicle: 0.7 },
+      name: 'Офисы', style: 'office', F: 3, FH: 3.2, spawnF: 0, exitF: 2,
+      floors: [
+        { gen: 'rooms', p: { extra: 10, doorW: 1, pillar: 0, cubicle: 0.7 } },
+        { gen: 'rooms', p: { extra: 12, doorW: 1, pillar: 0, cubicle: 0.6 } },
+        { gen: 'rooms', p: { extra: 10, doorW: 1, pillar: 0, cubicle: 0.7 } },
+      ],
+      build(map, rnd, used) {
+        BR.addAtrium(map, rnd, 0, 4);
+        for (let f = 0; f < 2; f++) { BR.addStairs(map, rnd, f, 2, used); BR.addLadders(map, rnd, f, 1, used); }
+        BR.addLow(map, rnd, 1, 4, 4);
+      },
+      mobs: 2, mobType: 'stalker', mobSpeed: 1.1, water: 4,
       puzzles: ['fuses', 'code'], fuses: 2,
-      intro: 'Последний этаж. Верните питание лифту (2 предохранителя) и введите код. Здесь вас двое преследователей.',
+      intro: 'Три этажа офиса. Верните питание лифту (2 предохранителя) и введите код на терминале наверху. Здесь вас двое преследователей.',
     },
   ];
 
-  function mulberry32(a) {
-    return function () {
-      a |= 0; a = (a + 0x6D2B79F5) | 0;
-      let t = Math.imul(a ^ (a >>> 15), 1 | a);
-      t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
-      return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
-    };
-  }
-
-  // Расстояния (в клетках) от клетки (sx, sy); -1 = недостижимо
-  function bfs(g, sx, sy) {
-    const dist = new Int16Array(N * N).fill(-1);
-    const q = [sx + sy * N];
-    dist[q[0]] = 0;
-    for (let i = 0; i < q.length; i++) {
-      const c = q[i], cx = c % N, cy = (c / N) | 0, d = dist[c];
-      for (const [dx, dy] of D4) {
-        const nx = cx + dx, ny = cy + dy;
-        if (nx < 0 || ny < 0 || nx >= N || ny >= N) continue;
-        const ni = nx + ny * N;
-        if (g[ni] || dist[ni] >= 0) continue;
-        dist[ni] = d + 1;
-        q.push(ni);
-      }
-    }
-    return dist;
-  }
-
-  /* ------------------------------ Генераторы ------------------------------ */
-  const at = (g, x, y) => g[y * N + x];
-  const set = (g, x, y, v) => { if (x > 0 && y > 0 && x < N - 1 && y < N - 1) g[y * N + x] = v; };
-
-  function carveRect(g, x, y, w, h) {
-    for (let yy = 0; yy < h; yy++) for (let xx = 0; xx < w; xx++) set(g, x + xx, y + yy, 0);
-  }
-
-  // Лабиринт: recursive backtracker (+ комнаты, петли, колонны)
-  function genMaze(rnd, g, p) {
-    const dirs = [[2, 0], [-2, 0], [0, 2], [0, -2]];
-    const stack = [[1, 1, -1]];
-    set(g, 1, 1, 0);
-    while (stack.length) {
-      const [cx, cy, ld] = stack[stack.length - 1];
-      const opts = [];
-      for (let k = 0; k < 4; k++) {
-        const nx = cx + dirs[k][0], ny = cy + dirs[k][1];
-        if (nx > 0 && ny > 0 && nx < N - 1 && ny < N - 1 && at(g, nx, ny) === 1) opts.push(k);
-      }
-      if (!opts.length) { stack.pop(); continue; }
-      const k = (ld >= 0 && opts.includes(ld) && rnd() < p.straight) ? ld : opts[Math.floor(rnd() * opts.length)];
-      const [dx, dy] = dirs[k];
-      set(g, cx + dx / 2, cy + dy / 2, 0);
-      set(g, cx + dx, cy + dy, 0);
-      stack.push([cx + dx, cy + dy, k]);
-    }
-    const rooms = [];
-    for (let i = 0; i < p.rooms; i++) {
-      const w = p.roomMin + Math.floor(rnd() * (p.roomMax - p.roomMin + 1));
-      const h = p.roomMin + Math.floor(rnd() * (p.roomMax - p.roomMin + 1));
-      const x = 1 + Math.floor(rnd() * (N - 2 - w)), y = 1 + Math.floor(rnd() * (N - 2 - h));
-      carveRect(g, x, y, w, h);
-      rooms.push({ x, y, w, h });
-    }
-    for (let i = 0; i < p.loops; i++) {
-      const x = 1 + Math.floor(rnd() * (N - 2)), y = 1 + Math.floor(rnd() * (N - 2));
-      if (at(g, x, y) !== 1) continue;
-      if ((at(g, x - 1, y) === 0 && at(g, x + 1, y) === 0) || (at(g, x, y - 1) === 0 && at(g, x, y + 1) === 0)) set(g, x, y, 0);
-    }
-    if (p.pillars) {
-      for (const r of rooms) {
-        if (r.w < 5 || r.h < 5) continue;
-        for (let yy = 1; yy < r.h - 1; yy++) for (let xx = 1; xx < r.w - 1; xx++) {
-          const x = r.x + xx, y = r.y + yy;
-          if (x % 2 || y % 2) continue;
-          let ok = true;
-          for (let oy = -1; oy <= 1 && ok; oy++) for (let ox = -1; ox <= 1; ox++) {
-            if ((ox || oy) && at(g, x + ox, y + oy) !== 0) { ok = false; break; }
-          }
-          if (ok) set(g, x, y, 1);
-        }
-      }
-    }
-  }
-
-  // Парковка: большой зал с колоннами, перегородками и «машинами»
-  function genHalls(rnd, g, p) {
-    carveRect(g, 1, 1, N - 2, N - 2);
-    for (let y = 4; y < N - 1; y += 4) for (let x = 4; x < N - 1; x += 4) set(g, x, y, 1);
-    for (let i = 0; i < p.walls; i++) {
-      const horiz = rnd() < 0.5, len = 5 + Math.floor(rnd() * 8);
-      const x = 3 + Math.floor(rnd() * (N - 6)), y = 3 + Math.floor(rnd() * (N - 6));
-      if (x < 8 && y < 8) continue;
-      const gap = 1 + Math.floor(rnd() * (len - 2));
-      for (let k = 0; k < len; k++) {
-        if (k === gap || k === gap + 1) continue;
-        set(g, horiz ? x + k : x, horiz ? y : y + k, 1);
-      }
-    }
-    for (let i = 0; i < p.blocks; i++) {
-      const x = 3 + Math.floor(rnd() * (N - 6)), y = 3 + Math.floor(rnd() * (N - 6));
-      if (x < 8 && y < 8) continue;
-      set(g, x, y, 1); set(g, x + 1, y, 1);
-    }
-  }
-
-  // Комнатные уровни (бассейны/офисы): сетка комнат 5x5 с дверями
-  function genRooms(rnd, g, p) {
-    const C = 6, R = 7;
-    const rx = (i) => 1 + C * i;
-    for (let j = 0; j < R; j++) for (let i = 0; i < R; i++) carveRect(g, rx(i), rx(j), 5, 5);
-    const door = (i, j, horiz) => { // horiz: дверь между (i,j) и (i+1,j)
-      const off = 1 + Math.floor(rnd() * 3);
-      for (let w = 0; w < p.doorW; w++) {
-        if (horiz) set(g, rx(i) + 5, rx(j) + off + w - (p.doorW > 1 && off > 2 ? 1 : 0), 0);
-        else set(g, rx(i) + off + w - (p.doorW > 1 && off > 2 ? 1 : 0), rx(j) + 5, 0);
-      }
-    };
-    const seen = new Set(['0,0']);
-    const st = [[0, 0]];
-    while (st.length) {
-      const [i, j] = st[st.length - 1];
-      const nb = [];
-      for (const [dx, dy] of D4) {
-        const ni = i + dx, nj = j + dy;
-        if (ni >= 0 && nj >= 0 && ni < R && nj < R && !seen.has(ni + ',' + nj)) nb.push([ni, nj]);
-      }
-      if (!nb.length) { st.pop(); continue; }
-      const [ni, nj] = nb[Math.floor(rnd() * nb.length)];
-      seen.add(ni + ',' + nj);
-      if (ni !== i) door(Math.min(i, ni), j, true); else door(i, Math.min(j, nj), false);
-      st.push([ni, nj]);
-    }
-    for (let k = 0; k < p.extra; k++) {
-      const i = Math.floor(rnd() * R), j = Math.floor(rnd() * R);
-      if (rnd() < 0.5 && i < R - 1) door(i, j, true); else if (j < R - 1) door(i, j, false);
-    }
-    for (let j = 0; j < R; j++) for (let i = 0; i < R; i++) {
-      if (p.pillar && rnd() < p.pillar) set(g, rx(i) + 2, rx(j) + 2, 1);
-      if (p.cubicle && rnd() < p.cubicle && (i || j)) {
-        // перегородка-«кубикл» от стены комнаты; откатываем, если она отрезает хоть одну клетку пола
-        const cells = [];
-        if (rnd() < 0.5) { for (let k = 0; k < 3; k++) cells.push([rx(i) + k, rx(j) + 2]); }
-        else { for (let k = 0; k < 3; k++) cells.push([rx(i) + 2, rx(j) + 2 + k]); }
-        const was = cells.map(([x, y]) => at(g, x, y));
-        for (const [x, y] of cells) set(g, x, y, 1);
-        const d = bfs(g, 1, 1);
-        let lost = false;
-        for (let t = 0; t < N * N; t++) if (!g[t] && d[t] < 0) { lost = true; break; }
-        if (lost) cells.forEach(([x, y], n) => set(g, x, y, was[n]));
-      }
-    }
-  }
-
-
-  // Больничный коридор-змейка: 9 широких (2 клетки) коридоров, на каждом мебель-препятствия
-  function genRun(rnd, g) {
-    const L = 31, count = 9;
-    for (let k = 0; k < count; k++) {
-      const y = 1 + 3 * k;
-      carveRect(g, 1, y, L, 2);
-      if (k < count - 1) carveRect(g, k % 2 === 0 ? L - 1 : 1, y + 2, 2, 1);
-    }
-  }
-
-  // Препятствия (круги столкновения): стулья, шкафы, матрасы, каталки... Проход всегда остаётся.
-  function genObstacles(rnd) {
-    const L = 31, kinds = [['chair', 0.5], ['cabinet', 0.95], ['mattress', 1.1], ['gurney', 1.05], ['cart', 0.8], ['table', 1.0]];
-    const out = [];
-    for (let k = 0; k < 9; k++) {
-      const z0 = (1 + 3 * k) * TILE;
-      let x = k === 0 ? 10 : 5;
-      while (x < L - 3) {
-        const lane = rnd() < 0.5 ? 2.0 : 6.0;
-        const [kind, r] = kinds[Math.floor(rnd() * kinds.length)];
-        out.push({ kind, x: (x + 0.5) * TILE, z: z0 + lane, r, rot: rnd() * Math.PI });
-        if (rnd() < 0.3) {
-          const [k2, r2] = kinds[Math.floor(rnd() * kinds.length)];
-          out.push({ kind: k2, x: (x + 0.5) * TILE + rnd() * 1.5, z: z0 + (lane < 4 ? 6.0 : 2.0), r: r2, rot: rnd() * Math.PI });
-        }
-        x += 5 + Math.floor(rnd() * 4);
-      }
-    }
-    return out;
-  }
-
-  const GENS = { maze: genMaze, halls: genHalls, rooms: genRooms, run: genRun };
-
-  /* ------------------------------ Уровень ------------------------------ */
+  /* ------------------------------ Генерация ------------------------------ */
   function generate(seed, levelIdx = 0) {
     const L = LEVELS[levelIdx];
     const rnd = mulberry32(((seed >>> 0) + levelIdx * 977) >>> 0);
-    const g = new Uint8Array(N * N).fill(1);
-    GENS[L.gen](rnd, g, L.p);
-    set(g, 1, 1, 0);
+    const map = BR.newMap(L.F, L.FH);
+    L.floors.forEach((spec, f) => BR.layerFromGrid(map, f, BR.gen2d(rnd, spec)));
+    const spawnCell = 1 + N;
+    const spawnNode = L.spawnF * NN + spawnCell;
+    const used = [spawnCell, spawnCell + 1, spawnCell + N]; // у старта ничего не строим
+    if (L.build) L.build(map, rnd, used);
+    for (let f = 0; f < map.F; f++) if (map.t[f][spawnCell] !== T.FLOOR) map.t[f][spawnCell] = f === L.spawnF ? T.FLOOR : map.t[f][spawnCell];
+    BR.finalize(map, spawnNode);
 
-    // Недостижимые участки закрываем стенами
-    let dist = bfs(g, 1, 1);
-    for (let i = 0; i < N * N; i++) if (!g[i] && dist[i] < 0) g[i] = 1;
+    map.seed = seed; map.level = levelIdx;
+    map.spawnNode = spawnNode;
+    const sp = BR.nodePos(map, spawnNode);
+    map.spawn = { x: sp.x, y: sp.y, z: sp.z, f: sp.f };
+    map.dist = BR.bfsNav(map.nav, spawnNode);
+    map.maxDist = 0;
+    map.spots = []; // достижимые клетки с ровным полом — для предметов, респавна, блуждания
+    for (let n = 0; n < map.nav.total; n++) {
+      if (map.dist[n] < 0) continue;
+      if (map.dist[n] > map.maxDist) map.maxDist = map.dist[n];
+      const t = map.t[Math.floor(n / NN)][n % NN];
+      if (t === T.FLOOR || t === T.LOW) map.spots.push(n);
+    }
+    map.exit = pickExit(map, rnd, L.exitF);
+    map.obst = L.floors[0].gen === 'run' ? BR.genObstacles(rnd) : [];
+    map.hash = BR.mapHash(map);
+    return map;
+  }
 
-    const floors = [];
-    let maxDist = 0;
-    for (let i = 0; i < N * N; i++) if (!g[i]) { floors.push(i); if (dist[i] > maxDist) maxDist = dist[i]; }
-    const center = (i) => ({ x: ((i % N) + 0.5) * TILE, z: (((i / N) | 0) + 0.5) * TILE });
-
-    // Выход: стена с ровно одним соседним полом, как можно дальше от старта
+  // Выход: стена-ниша с ровно одним соседним полом, подальше от старта
+  function pickExit(map, rnd, f) {
+    const Lt = map.t[f];
     const cands = [];
-    for (let y = 1; y < N - 1; y++) for (let x = 1; x < N - 1; x++) {
-      if (!g[y * N + x]) continue;
-      let cnt = 0, f = -1, fdx = 0, fdy = 0;
-      for (const [dx, dy] of D4) {
-        const nx = x + dx, ny = y + dy;
-        if (!g[ny * N + nx]) { cnt++; f = ny * N + nx; fdx = dx; fdy = dy; }
+    for (let z = 1; z < N - 1; z++) for (let x = 1; x < N - 1; x++) {
+      const i = x + z * N;
+      if (Lt[i] !== T.WALL) continue;
+      let cnt = 0, fl = -1, fd = 0, bad = false;
+      for (let d = 0; d < 4; d++) {
+        const j = (x + D4[d][0]) + (z + D4[d][1]) * N, t = Lt[j];
+        if (t === T.FLOOR && map.dist[f * NN + j] >= 0) { cnt++; fl = j; fd = d; }
+        else if (t !== T.WALL) bad = true;
       }
-      if (cnt === 1) cands.push({ x, y, f, d: dist[f], fdx, fdy });
+      if (cnt === 1 && !bad && (f + 1 >= map.F || map.t[f + 1][i] !== T.HOLE)) cands.push({ i, fl, fd, d: map.dist[f * NN + fl] });
     }
     cands.sort((a, b) => b.d - a.d);
     let ex = cands[Math.floor(rnd() * Math.min(5, cands.length))];
-    if (!ex) { // запасной вариант: пробиваем нишу у самого дальнего пола
-      const far = floors.reduce((a, b) => (dist[b] > dist[a] ? b : a), floors[0]);
-      const fx = far % N, fy = (far / N) | 0;
-      for (const [dx, dy] of D4) {
-        const x = fx + dx, y = fy + dy;
-        if (x > 0 && y > 0 && x < N - 1 && y < N - 1 && g[y * N + x]) { ex = { x, y, f: far, d: dist[far], fdx: dx, fdy: dy }; break; }
+    if (!ex) { // запасной вариант: ниша у самого дальнего пола этажа, у которого есть стена рядом
+      const onF = map.spots.filter((n) => Math.floor(n / NN) === f).sort((a, b) => map.dist[b] - map.dist[a]);
+      if (!onF.length) return pickExit(map, rnd, f > 0 ? f - 1 : map.F - 1); // этаж недостижим — берём другой
+      for (const far of onF) {
+        const fi = far % NN;
+        for (let d = 0; d < 4 && !ex; d++) {
+          const x = cellX(fi) + D4[d][0], z = cellZ(fi) + D4[d][1];
+          if (inner(x, z) && Lt[x + z * N] === T.WALL) ex = { i: x + z * N, fl: fi, fd: d ^ 1, d: map.dist[far] };
+        }
+        if (ex) break;
       }
     }
-    const fc = center(ex.f);
-    const exit = {
-      tx: ex.x, ty: ex.y,
-      wx: (ex.x + 0.5) * TILE, wz: (ex.y + 0.5) * TILE, // центр двери
-      fx: fc.x, fz: fc.z,                                // пол перед дверью
-      dx: -ex.fdx, dz: -ex.fdy,                          // направление от пола к двери
+    const y = f * map.FH;
+    return {
+      f, y, cell: ex.i, tx: cellX(ex.i), ty: cellZ(ex.i),
+      wx: BR.centerX(ex.i), wz: BR.centerZ(ex.i),   // центр двери
+      fx: BR.centerX(ex.fl), fz: BR.centerZ(ex.fl), // пол перед дверью
+      dx: -D4[ex.fd][0], dz: -D4[ex.fd][1],          // направление от пола к двери
+      frontNode: f * NN + ex.fl,
     };
-
-    const obst = L.gen === 'run' ? genObstacles(rnd) : [];
-    return { seed, level: levelIdx, g, floors, dist, maxDist, wallH: L.wallH, spawn: center(1 + N), exit, obst };
   }
 
-  function setDoor(map, open) { map.g[map.exit.ty * N + map.exit.tx] = open ? 0 : 1; }
+  function setDoor(map, open) { BR.setCell(map, map.exit.f, map.exit.cell, open ? T.FLOOR : T.WALL); }
 
   /* --------------------------- Расстановка объектов --------------------------- */
-  function shuffle(rnd, arr) {
-    const a = arr.slice();
-    for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(rnd() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; }
-    return a;
+  const sameFloorSep = (a, b) => (Math.floor(a / NN) !== Math.floor(b / NN) ? 1e9
+    : Math.max(Math.abs(cellX(a % NN) - cellX(b % NN)), Math.abs(cellZ(a % NN) - cellZ(b % NN))));
+
+  function spotOf(map, n) {
+    const p = BR.nodePos(map, n);
+    return { x: p.x, y: p.y, z: p.z, f: p.f, node: n, tile: p.i };
   }
 
-  // n случайных клеток пола с ограничениями по расстоянию от старта и друг от друга
+  // n точек на ровном полу с ограничениями: minDist/maxDist — по графу от старта, minSep — в клетках на одном этаже,
+  // floor — только этот этаж
   function pickSpots(map, rnd, n, o = {}) {
     const minDist = o.minDist || 0, maxDist = o.maxDist == null ? 1e9 : o.maxDist;
-    const order = shuffle(rnd, map.floors);
+    let order = shuffle(rnd, map.spots);
+    if (o.floor != null) order = order.filter((m) => Math.floor(m / NN) === o.floor);
     const taken = [];
-    const attempts = [[minDist, o.minSep || 0], [minDist, Math.floor((o.minSep || 0) / 2)], [0, 0]];
-    for (const [md, sep] of attempts) {
-      for (const i of order) {
+    for (const [md, sep] of [[minDist, o.minSep || 0], [minDist, Math.floor((o.minSep || 0) / 2)], [0, 0]]) {
+      for (const m of order) {
         if (taken.length >= n) break;
-        const d = map.dist[i];
-        if (d < md || d > maxDist || taken.includes(i)) continue;
-        const cx = i % N, cy = (i / N) | 0;
-        if (taken.every((j) => Math.max(Math.abs((j % N) - cx), Math.abs(((j / N) | 0) - cy)) >= sep)) taken.push(i);
+        const d = map.dist[m];
+        if (d < md || d > maxDist || taken.includes(m)) continue;
+        if (taken.every((t) => sameFloorSep(t, m) >= sep)) taken.push(m);
       }
       if (taken.length >= n) break;
     }
-    return taken.map((i) => ({ x: ((i % N) + 0.5) * TILE, z: (((i / N) | 0) + 0.5) * TILE, tile: i }));
+    return taken.map((m) => spotOf(map, m));
   }
 
-  // То же, но точки на стенах (нужны для цифр и записок). nx,nz — нормаль в сторону комнаты.
+  // Точки на стенах (цифры, записки). nx,nz — нормаль в сторону комнаты.
   function pickWallSpots(map, rnd, n, o = {}) {
     const minDist = o.minDist || 0, maxDist = o.maxDist == null ? 1e9 : o.maxDist, sep = o.minSep || 0;
-    const order = shuffle(rnd, map.floors);
+    const order = shuffle(rnd, map.spots).filter((m) => map.t[Math.floor(m / NN)][m % NN] === T.FLOOR);
     const out = [], used = [];
     for (const relax of [1, 0.5, 0]) {
-      for (const i of order) {
+      for (const m of order) {
         if (out.length >= n) break;
-        const d = map.dist[i];
-        if (d < minDist * relax || d > maxDist || used.includes(i)) continue;
-        const cx = i % N, cy = (i / N) | 0;
-        if (!used.every((j) => Math.max(Math.abs((j % N) - cx), Math.abs(((j / N) | 0) - cy)) >= sep * relax)) continue;
-        const walls = D4.filter(([dx, dy]) => {
-          const x = cx + dx, y = cy + dy;
-          return map.g[y * N + x] && !(x === map.exit.tx && y === map.exit.ty);
+        const d = map.dist[m];
+        if (d < minDist * relax || d > maxDist || used.includes(m)) continue;
+        if (!used.every((u) => sameFloorSep(u, m) >= sep * relax)) continue;
+        const f = Math.floor(m / NN), i = m % NN, cx = cellX(i), cz = cellZ(i);
+        const walls = D4.filter(([dx, dz]) => {
+          const j = (cx + dx) + (cz + dz) * N;
+          return map.t[f][j] === T.WALL && !(f === map.exit.f && j === map.exit.cell);
         });
         if (!walls.length) continue;
-        const [dx, dy] = walls[Math.floor(rnd() * walls.length)];
-        used.push(i);
-        out.push({ x: (cx + 0.5) * TILE + dx * (TILE / 2 - 0.04), z: (cy + 0.5) * TILE + dy * (TILE / 2 - 0.04), nx: -dx, nz: -dy, tile: i });
+        const [dx, dz] = walls[Math.floor(rnd() * walls.length)];
+        used.push(m);
+        out.push({ x: (cx + 0.5) * TILE + dx * (TILE / 2 - 0.04), y: f * map.FH, z: (cz + 0.5) * TILE + dz * (TILE / 2 - 0.04), f, nx: -dx, nz: -dz, tile: i, node: m });
       }
       if (out.length >= n) break;
     }
     return out;
   }
 
-  const tileOf = (x, z) => [Math.floor(x / TILE), Math.floor(z / TILE)];
-
-  function isWall(map, x, z) {
-    const tx = Math.floor(x / TILE), ty = Math.floor(z / TILE);
-    if (tx < 0 || ty < 0 || tx >= N || ty >= N) return true;
-    return map.g[ty * N + tx] === 1;
-  }
-
-  function collide(map, x, z, r) {
-    if (isWall(map, x - r, z - r) || isWall(map, x + r, z - r) ||
-        isWall(map, x - r, z + r) || isWall(map, x + r, z + r)) return true;
-    if (map.obst) for (const o of map.obst) if (Math.hypot(x - o.x, z - o.z) < o.r + r) return true;
-    return false;
-  }
-
-  // Движение с раздельной проверкой по осям (скольжение вдоль стен)
-  function move(map, x, z, dx, dz, r) {
-    if (!collide(map, x + dx, z, r)) x += dx;
-    if (!collide(map, x, z + dz, r)) z += dz;
-    return { x, z };
-  }
-
-  // Прямая видимость между двумя точками
-  function los(map, x0, z0, x1, z1) {
-    const d = Math.hypot(x1 - x0, z1 - z0);
-    const steps = Math.ceil(d / 0.5);
-    for (let i = 1; i < steps; i++) {
-      const t = i / steps;
-      if (isWall(map, x0 + (x1 - x0) * t, z0 + (z1 - z0) * t)) return false;
-    }
-    return true;
-  }
-
-  // Кратчайший маршрут от старта до клетки перед дверью (индексы клеток)
+  // Кратчайший путь (узлы) от старта до клетки перед дверью
   function route(map) {
-    const d = bfs(map.g, Math.floor(map.exit.fx / TILE), Math.floor(map.exit.fz / TILE));
-    let x = 1, y = 1, guard = 0;
-    const out = [x + y * N];
-    while (d[x + y * N] > 0 && guard++ < 4000) {
-      let best = null, bd = d[x + y * N];
-      for (const [dx, dy] of D4) {
-        const nx = x + dx, ny = y + dy;
-        if (nx < 0 || ny < 0 || nx >= N || ny >= N) continue;
-        const v = d[nx + ny * N];
-        if (v >= 0 && v < bd) { bd = v; best = [nx, ny]; }
-      }
-      if (!best) break;
-      [x, y] = best; out.push(x + y * N);
+    const nav = BR.ensureNav(map);
+    const d = BR.bfsNav(nav, map.exit.frontNode, true);
+    let n = map.spawnNode;
+    const out = [n];
+    for (let guard = 0; d[n] > 0 && guard < 5000; guard++) {
+      let best = -1;
+      for (const m of nav.out[n] || []) if (d[m] >= 0 && d[m] < d[n] && (best < 0 || d[m] < d[best])) best = m;
+      if (best < 0) break;
+      n = best; out.push(n);
     }
     return out;
   }
 
-  const api = {
-    TILE, N, WALL_H, D4, LEVELS, mulberry32, generate, setDoor, bfs, pickSpots, pickWallSpots,
-    tileOf, isWall, collide, move, los, route,
-  };
-  if (typeof module !== 'undefined' && module.exports) module.exports = api;
-  else root.BR = api;
+  Object.assign(BR, { LEVELS, generate, setDoor, pickSpots, pickWallSpots, route, spotOf });
+  if (isNode) module.exports = BR;
 })(typeof window !== 'undefined' ? window : globalThis);

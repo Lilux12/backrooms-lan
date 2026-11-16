@@ -113,3 +113,11 @@ h1 { margin: 0; font-size: clamp(38px, 8vw, 78px); letter-spacing: .12em; font-w
 .set output { text-align: right; opacity: .75; }
 input[type=range] { width: 100%; accent-color: var(--y); }
 select { font: inherit; background: #1b1707; color: var(--y); border: 1px solid var(--line); padding: 3px; width: 100%; }
+
+/* Под водой: синий туман по краям */
+#underwater { background: radial-gradient(ellipse at center, rgba(20,90,110,.35) 20%, rgba(5,40,60,.85) 100%); opacity: 0; transition: opacity .25s; }
+#o2 { background: #9fe6ff; }
+#o2row { display: none; }
+button.small { width: 100%; margin-top: 8px; padding: 7px 0; font: inherit; font-size: 13px; cursor: pointer;
+  background: rgba(0,0,0,.4); color: var(--y); border: 1px solid var(--line); }
+button.small:hover { border-color: var(--y); }

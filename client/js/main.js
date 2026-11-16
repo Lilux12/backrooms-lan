@@ -3,21 +3,26 @@ import { clamp } from './core/util.js';
 import { FL, S, UP, keys, me } from './core/state.js';
 import { camera, renderer, scene, updateDust } from './render/scene.js';
 import { updateLight } from './render/lighting.js';
-import { H } from './world/world.js';
+import { H, map } from './world/world.js';
+import { animateWater } from './world/geometry.js';
 import { animateObjects } from './world/objects.js';
 import { remotes, updateRemotes } from './entities/avatars.js';
 import { updateMobs } from './entities/mobs.js';
 import { updateAudio } from './audio/audio.js';
 import { updateHud } from './ui/hud.js';
 import { initMenu } from './ui/menu.js';
-import { updateBattery, updateCamera, updateMovement } from './game/player.js';
+import { placeMe, updateBattery, updateCamera, updateMovement } from './game/player.js';
 
 // Модуль ввода вешает обработчики клавиш при загрузке.
 import './game/input.js';
 
 let last = performance.now();
 
-window.__br = { me, FL, UP, S, keys: () => keys, remotes: () => remotes.size }; // доступ для отладки и тестов
+// доступ для отладки и тестов: состояние, карта, телепорт камеры
+window.__br = {
+  me, FL, UP, S, keys: () => keys, remotes: () => remotes.size, map: () => map,
+  tp(x, y, z, yaw = me.yaw, pitch = 0) { placeMe(x, y, z); me.yaw = yaw; me.pitch = pitch; },
+};
 
 function update(dt) {
   S.time += dt;
@@ -26,6 +31,7 @@ function update(dt) {
   updateRemotes(dt);
   const mobDist = updateMobs(dt);
   animateObjects(dt);
+  animateWater(dt);
   updateBattery(dt);
   updateDust(dt, H);
   updateLight(dt);

@@ -29,7 +29,7 @@ async function main() {
     waiters.push(w);
   });
   const send = (o) => ws.send(JSON.stringify(o));
-  const goTo = async (x, z) => { send({ t: 'p', x, z, r: 0 }); await sleep(120); };
+  const goTo = async (x, y, z) => { send({ t: 'p', x, y, z, r: 0 }); await sleep(120); };
 
   try {
     send({ t: 'join', name: 'Бот' });
@@ -39,35 +39,35 @@ async function main() {
       const objs = init.objs, t0 = Date.now();
       const of = (k) => objs.filter((o) => o.kind === k);
       // Предохранители
-      for (const f of of('fuse')) await goTo(f.x, f.z);
-      for (const b of of('box')) { await goTo(b.x + 0.5, b.z); send({ t: 'use', id: b.id }); await sleep(100); }
+      for (const f of of('fuse')) await goTo(f.x, f.y, f.z);
+      for (const b of of('box')) { await goTo(b.x + 0.5, b.y, b.z); send({ t: 'use', id: b.id }); await sleep(100); }
       // Код: обойти цифры, затем ввести на терминале
       const digits = of('digit');
-      for (const d of digits) await goTo(d.x + d.nx * 1.5, d.z + d.nz * 1.5);
+      for (const d of digits) await goTo(d.x + d.nx * 1.5, d.y, d.z + d.nz * 1.5);
       for (const k of of('keypad')) {
-        await goTo(k.x, k.z);
+        await goTo(k.x, k.y, k.z);
         send({ t: 'code', v: '0000' }); await waitFor((m) => m.t === 'codebad'); // неверный код → отказ
         send({ t: 'code', v: digits.sort((a, b) => a.idx - b.idx).map((d) => d.digit).join('') });
         await waitFor((m) => m.t === 'codeok');
       }
       // Плиты: встать на одну, потом на другую (первая держится 22 с)
-      for (const p of of('plate')) await goTo(p.x, p.z);
+      for (const p of of('plate')) await goTo(p.x, p.y, p.z);
       // Рычаги: прочитать записку и тянуть по порядку
       for (const n of of('note')) {
-        await goTo(n.x + n.nx * 1.5, n.z + n.nz * 1.5);
+        await goTo(n.x + n.nx * 1.5, n.y, n.z + n.nz * 1.5);
         send({ t: 'use', id: n.id });
         const note = await waitFor((m) => m.t === 'note');
         const order = note.text.split('\n').filter((l) => /^\d\)/.test(l)).map((l) => RIDDLES.findIndex((r) => l.includes(r)));
         assert.strictEqual(order.length, 4, 'не разобрана записка');
         for (const col of order) {
           const lv = of('lever').find((l) => l.col === col);
-          await goTo(lv.x + 0.5, lv.z); send({ t: 'use', id: lv.id }); await sleep(100);
+          await goTo(lv.x + 0.5, lv.y, lv.z); send({ t: 'use', id: lv.id }); await sleep(100);
         }
       }
       // Ждём открытия двери и идём к ней
       const door = of('door')[0];
       if (!door.open) await waitFor((m) => m.t === 'obj' && m.id === door.id && m.p.open, LEVEL_TIMEOUT);
-      await goTo(door.x, door.z);
+      await goTo(door.x, door.y, door.z);
       const done = await waitFor((m) => m.t === 'done', LEVEL_TIMEOUT);
       console.log(`  уровень ${level} пройден за ${((Date.now() - t0) / 1000).toFixed(1)} с`);
       if (done.last) break;

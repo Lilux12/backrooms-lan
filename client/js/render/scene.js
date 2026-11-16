@@ -61,7 +61,8 @@ export function updateDust(dt, H) {
     dp[i * 3] += v[0] * dt; dp[i * 3 + 1] += v[1] * dt; dp[i * 3 + 2] += v[2] * dt;
     dp[i * 3] = camera.position.x + ((dp[i * 3] - camera.position.x + DUST_R * 3) % (DUST_R * 2)) - DUST_R;
     dp[i * 3 + 2] = camera.position.z + ((dp[i * 3 + 2] - camera.position.z + DUST_R * 3) % (DUST_R * 2)) - DUST_R;
-    if (dp[i * 3 + 1] > H) dp[i * 3 + 1] = 0.1; else if (dp[i * 3 + 1] < 0) dp[i * 3 + 1] = H - 0.1;
+    const lo = camera.position.y - 1.7, hi = lo + H; // пыль — в объёме вокруг камеры по высоте
+    if (dp[i * 3 + 1] > hi) dp[i * 3 + 1] = lo + 0.1; else if (dp[i * 3 + 1] < lo) dp[i * 3 + 1] = hi - 0.1;
   }
   dustGeo.attributes.position.needsUpdate = true;
 }

@@ -4,7 +4,7 @@ import { saveSettings, settings } from '../core/settings.js';
 import { S, me } from '../core/state.js';
 import { applyQuality, camera, renderer } from '../render/scene.js';
 import { A, initAudio } from '../audio/audio.js';
-import { connect } from '../net/net.js';
+import { connect, sendNet } from '../net/net.js';
 import { setStatus } from './hud.js';
 import { closeBigMap } from './maps.js';
 
@@ -31,6 +31,7 @@ document.addEventListener('pointerlockchange', () => {
   if (S.started && S.joined && !S.locked) {
     $('subtitle').textContent = 'ПАУЗА · КЛИК, ЧТОБЫ ПРОДОЛЖИТЬ (существо не ждёт!)';
     $('play').textContent = 'ПРОДОЛЖИТЬ';
+    $('stuck').style.display = 'block';
     $('menu').style.display = 'flex';
   }
 });
@@ -42,6 +43,7 @@ document.addEventListener('mousemove', (e) => {
 
 /* ======================= Меню, настройки, плёнка ======================= */
 export function initMenu() {
+  $('stuck').addEventListener('click', () => { sendNet({ t: 'stuck' }); $('play').click(); });
   const list = $('lvlList');
   const hints = ['предохранители', 'код на стенах', 'нажимные плиты', 'рычаги', 'бегство', 'всё сразу'];
   LEVELS.forEach((L, i) => {

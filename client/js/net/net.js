@@ -2,13 +2,14 @@
 import { $, LEVELS } from '../core/util.js';
 import { FL, S, UP, keypad, me } from '../core/state.js';
 import { scene } from '../render/scene.js';
-import { buildWorld, curLevel, objs, world } from '../world/world.js';
+import { buildWorld, curLevel, objs, removeObj, setWater } from '../world/world.js';
 import { refreshObj } from '../world/objects.js';
 import { remotes, setPlayers } from '../entities/avatars.js';
 import { ensureMobs, mobEnts } from '../entities/mobs.js';
 import { sfx, tone } from '../audio/audio.js';
 import { closeKeypad, hideBanner, renderGoals, setStatus, showBanner, showLevelTitle, showNote, toast, updateKeypad } from '../ui/hud.js';
 import { beginPlay } from '../ui/menu.js';
+import { placeMe } from '../game/player.js';
 import { closeBigMap } from '../ui/maps.js';
 
 /* ============================== Сеть ============================== */
@@ -36,14 +37,15 @@ function onNet(m) {
   switch (m.t) {
     case 'init': {
       S.myId = m.id;
-      buildWorld(m.level, m.seed, m.objs);
+      const built = buildWorld(m.level, m.seed, m.objs, m.wl);
+      sendNet({ t: 'hash', level: m.level, hash: built.hash }); // сервер сверит геометрию
       for (const r of remotes.values()) scene.remove(r.mesh);
       remotes.clear();
       ensureMobs(0, LEVELS[m.level].mobType);
       UP.map = !!(m.upgrades && m.upgrades.map);
       closeBigMap();
       if (LEVELS[m.level].chase) FL.on = false;
-      me.x = m.spawn.x; me.z = m.spawn.z; me.yaw = Math.PI * 0.5; me.pitch = 0;
+      placeMe(m.spawn.x, m.spawn.y, m.spawn.z); me.yaw = Math.PI * 0.5; me.pitch = 0;
       me.stamina = 1; me.exhausted = false;
       S.goalLines = m.goals; S.heldFuses = m.held;
       closeKeypad(); $('note').style.display = 'none';
@@ -56,17 +58,17 @@ function onNet(m) {
     }
     case 'players': setPlayers(m.list); break;
     case 's': {
-      for (const [id, x, z, r, fl] of m.p) {
+      for (const [id, x, y, z, r, fl, cr] of m.p) {
         const rem = remotes.get(id);
         if (!rem) continue;
-        rem.tx = x; rem.tz = z; rem.tr = r; rem.fl = !!fl;
-        if (!rem.seen) { rem.x = x; rem.z = z; rem.r = r; rem.seen = true; rem.mesh.visible = true; }
+        rem.tx = x; rem.ty = y; rem.tz = z; rem.tr = r; rem.fl = !!fl; rem.crouch = !!cr;
+        if (!rem.seen) { rem.x = x; rem.y = y; rem.z = z; rem.r = r; rem.seen = true; rem.mesh.visible = true; }
       }
       ensureMobs(m.m.length, LEVELS[curLevel].mobType);
-      m.m.forEach(([x, z, r, chase, stun], i) => {
+      m.m.forEach(([x, y, z, r, chase, stun], i) => {
         const mo = mobEnts[i];
-        mo.tx = x; mo.tz = z; mo.tr = r; mo.chase = !!chase; mo.stun = !!stun;
-        if (!mo.seen) { mo.x = x; mo.z = z; mo.r = r; mo.seen = true; mo.group.visible = true; }
+        mo.tx = x; mo.ty = y; mo.tz = z; mo.tr = r; mo.chase = !!chase; mo.stun = !!stun;
+        if (!mo.seen) { mo.x = x; mo.y = y; mo.z = z; mo.r = r; mo.seen = true; mo.group.visible = true; }
       });
       break;
     }
@@ -81,8 +83,7 @@ function onNet(m) {
       break;
     }
     case 'pick': {
-      const rec = objs.get(m.id);
-      if (rec) { world.remove(rec.group); objs.delete(m.id); }
+      removeObj(m.id);
       m.kind === 'fuse' ? sfx.fuse() : sfx.pickup();
       if (m.kind !== 'mapitem') toast(m.kind === 'fuse' ? `${m.by} нашёл предохранитель` : `${m.by} нашёл воду`, 2000);
       break;
@@ -106,11 +107,11 @@ function onNet(m) {
     case 'alarm': S.alarmUntil = performance.now() / 1000 + 6; sfx.alarm(); toast('СИРЕНА! Существа идут на шум!', 3500); break;
     case 'sfx': if (sfx[m.name]) sfx[m.name](); break;
     case 'caught': {
-      me.x = m.x; me.z = m.z;
+      placeMe(m.x, m.y, m.z);
       sfx.caught();
       const fl = $('flash'); fl.classList.add('on');
       setTimeout(() => fl.classList.remove('on'), 80);
-      toast('Существо поймало вас! Вы очнулись в другом месте…', 3500);
+      toast({ drown: 'Вы захлебнулись и очнулись в другом месте…', stuck: 'Вы вернулись к началу уровня', caught: 'Существо поймало вас! Вы очнулись в другом месте…' }[m.reason] || 'Вы очнулись в другом месте…', 3500);
       break;
     }
     case 'done':
@@ -120,9 +121,10 @@ function onNet(m) {
         : `УРОВЕНЬ ПРОЙДЕН<br><small>Дальше: ${m.next}</small>`);
       break;
     case 'ev': toast(m.text, 3000); break;
+    case 'water': setWater(m.wl); break;
   }
 }
 
 setInterval(() => {
-  if (S.joined) sendNet({ t: 'p', x: +me.x.toFixed(2), z: +me.z.toFixed(2), r: +me.yaw.toFixed(3), f: FL.on ? 1 : 0 });
+  if (S.joined) sendNet({ t: 'p', x: +me.x.toFixed(2), y: +me.y.toFixed(2), z: +me.z.toFixed(2), r: +me.yaw.toFixed(3), f: FL.on ? 1 : 0, c: me.body && me.body.crouch ? 1 : 0 });
 }, 50);

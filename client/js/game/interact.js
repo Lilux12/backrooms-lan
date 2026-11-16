@@ -14,7 +14,10 @@ export function nearestUsable() {
     const o = rec.o;
     if (!INTERACTIVE.includes(o.kind) || (o.kind === 'lever' && o.on)) continue;
     const d = Math.hypot(o.x - me.x, o.z - me.z);
-    if (d < bd && BR.los(map, me.x, me.z, o.x, o.z)) { bd = d; best = o; }
+    if (Math.abs((o.y || 0) - me.y) > 1.8) continue;
+    // точка проверки чуть отодвинута от стены, иначе настенный объект «внутри» стены
+    const ox = o.nx !== undefined ? o.x + o.nx * 0.3 : o.x, oz = o.nz !== undefined ? o.z + o.nz * 0.3 : o.z;
+    if (d < bd && BR.los3(map, me.x, me.y + 1.5, me.z, ox, (o.y || 0) + 1.0, oz)) { bd = d; best = o; }
   }
   return best;
 }

@@ -5,7 +5,8 @@
   "main": "server/index.js",
   "scripts": {
     "start": "node server/index.js",
-    "test": "node tests/smoke-server.js && node tests/bot-playthrough.js && node tests/smoke-browser.js"
+    "test": "node tests/verify-levels.js 60 && node tests/smoke-server.js && node tests/bot-playthrough.js && node tests/smoke-browser.js",
+    "verify": "node tests/verify-levels.js 300"
   },
   "repository": {
     "type": "git",

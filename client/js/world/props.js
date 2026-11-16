@@ -115,16 +115,19 @@ export function addDecor(grpWorld, styleName, seed) {
   if (!D) return;
   const rnd = propRng(seed * 31 + 7);
   const ex = map.exit, sp = map.spawn;
-  const walls = []; // [cx, cz, dx, dz]
-  const floors = [];
-  for (let ty = 0; ty < N; ty++) for (let tx = 0; tx < N; tx++) {
-    if (map.g[ty * N + tx]) continue;
-    floors.push([tx, ty]);
-    for (const [dx, dz] of BR.D4) {
-      const nx = tx + dx, ny = ty + dz;
-      if (nx < 0 || ny < 0 || nx >= N || ny >= N) continue;
-      if (nx === ex.tx && ny === ex.ty) continue;
-      if (map.g[ny * N + nx]) walls.push([(tx + 0.5) * TILE, (ty + 0.5) * TILE, dx, dz]);
+  const walls = []; // [cx, cz, dx, dz, y пола]
+  const floors = []; // [tx, tz, y пола]
+  for (let f = 0; f < map.F; f++) {
+    const L = map.t[f], b = f * map.FH;
+    for (let ty = 0; ty < N; ty++) for (let tx = 0; tx < N; tx++) {
+      if (L[ty * N + tx] !== BR.T.FLOOR) continue;
+      floors.push([tx, ty, b]);
+      for (const [dx, dz] of BR.D4) {
+        const nx = tx + dx, ny = ty + dz;
+        if (nx < 0 || ny < 0 || nx >= N || ny >= N) continue;
+        if (f === ex.f && nx === ex.tx && ny === ex.ty) continue;
+        if (L[ny * N + nx] === BR.T.WALL) walls.push([(tx + 0.5) * TILE, (ty + 0.5) * TILE, dx, dz, b]);
+      }
     }
   }
   // Трубы / воздуховоды / поручни вдоль стен
@@ -139,37 +142,37 @@ export function addDecor(grpWorld, styleName, seed) {
       const ax = walls.filter((w) => w[3] !== 0), az = walls.filter((w) => w[2] !== 0);
       const iX = new THREE.InstancedMesh(geoX, mat, ax.length), iZ = new THREE.InstancedMesh(geoZ, mat, az.length);
       const m4 = new THREE.Matrix4();
-      ax.forEach((w, i) => { m4.setPosition(w[0] + w[2] * (TILE / 2 - r - 0.04), y, w[1] + w[3] * (TILE / 2 - r - 0.04)); iX.setMatrixAt(i, m4); });
-      az.forEach((w, i) => { m4.setPosition(w[0] + w[2] * (TILE / 2 - r - 0.04), y, w[1] + w[3] * (TILE / 2 - r - 0.04)); iZ.setMatrixAt(i, m4); });
+      ax.forEach((w, i) => { m4.setPosition(w[0] + w[2] * (TILE / 2 - r - 0.04), w[4] + y, w[1] + w[3] * (TILE / 2 - r - 0.04)); iX.setMatrixAt(i, m4); });
+      az.forEach((w, i) => { m4.setPosition(w[0] + w[2] * (TILE / 2 - r - 0.04), w[4] + y, w[1] + w[3] * (TILE / 2 - r - 0.04)); iZ.setMatrixAt(i, m4); });
       iX.frustumCulled = iZ.frustumCulled = false;
       grpWorld.add(iX, iZ);
     }
   }
   // Потёки/лужи на полу
-  const nd = 48, dm = new THREE.MeshBasicMaterial({ map: getDecalTex(), color: D.decal[0], transparent: true, opacity: D.decal[1], depthWrite: false, polygonOffset: true, polygonOffsetFactor: -1 });
+  const nd = 48 * map.F, dm = new THREE.MeshBasicMaterial({ map: getDecalTex(), color: D.decal[0], transparent: true, opacity: D.decal[1], depthWrite: false, polygonOffset: true, polygonOffsetFactor: -1 });
   const dg = new THREE.PlaneGeometry(1, 1); dg.rotateX(-Math.PI / 2);
   const dec = new THREE.InstancedMesh(dg, dm, nd);
   const m4 = new THREE.Matrix4(), q = new THREE.Quaternion(), sc = new THREE.Vector3(), ps = new THREE.Vector3(), up = new THREE.Vector3(0, 1, 0);
   for (let i = 0; i < nd; i++) {
-    const [tx, ty] = floors[Math.floor(rnd() * floors.length)];
+    const [tx, ty, fy] = floors[Math.floor(rnd() * floors.length)];
     const s = 0.8 + rnd() * 2.6;
     q.setFromAxisAngle(up, rnd() * 6.28); sc.set(s, 1, s * (0.6 + rnd() * 0.6));
-    ps.set((tx + 0.5) * TILE + (rnd() - 0.5) * 3, 0.012 + (i % 5) * 0.001, (ty + 0.5) * TILE + (rnd() - 0.5) * 3);
+    ps.set((tx + 0.5) * TILE + (rnd() - 0.5) * 3, fy + 0.012 + (i % 5) * 0.001, (ty + 0.5) * TILE + (rnd() - 0.5) * 3);
     m4.compose(ps, q, sc); dec.setMatrixAt(i, m4);
   }
   dec.frustumCulled = false; grpWorld.add(dec);
   // Мелкие предметы у стен (не на пути: прижаты к стене)
-  const near = (x, z, p) => Math.hypot(x - p.x, z - p.z) < 7;
+  const near = (x, y, z, p) => Math.hypot(x - p.x, z - p.z) < 7 && Math.abs(y - p.y) < 2;
   let placed = 0;
-  for (let tries = 0; tries < 900 && placed < 46; tries++) {
+  for (let tries = 0; tries < 900 * map.F && placed < 46 * map.F; tries++) {
     const w = walls[Math.floor(rnd() * walls.length)];
     if (!w || rnd() > 0.35) continue;
     const t = (rnd() - 0.5) * 2.2;
     const x = w[0] + w[2] * 1.5 + (w[3] !== 0 ? t : 0), z = w[1] + w[3] * 1.5 + (w[2] !== 0 ? t : 0);
-    if (near(x, z, sp) || near(x, z, { x: (ex.tx + 0.5) * TILE, z: (ex.ty + 0.5) * TILE })) continue;
+    if (near(x, w[4], z, sp) || near(x, w[4], z, { x: ex.wx, y: ex.y, z: ex.wz })) continue;
     const kind = D.props[Math.floor(rnd() * D.props.length)];
     const pr = buildProp(kind);
-    pr.position.set(x, 0, z); pr.rotation.y = rnd() * 6.28;
+    pr.position.set(x, w[4], z); pr.rotation.y = rnd() * 6.28;
     grpWorld.add(pr); placed++;
   }
 }

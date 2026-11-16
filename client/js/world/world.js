@@ -1,71 +1,43 @@
-// Построение геометрии уровня из карты
+// Построение уровня на клиенте: карта из общего генератора, геометрия этажей, объекты, декор
 import * as THREE from 'three';
-import { BR, FULL, LEVELS, N, TILE } from '../core/util.js';
+import { BR, LEVELS } from '../core/util.js';
 import { scene } from '../render/scene.js';
 import { applyStyle, mats, panelMat } from '../render/lighting.js';
 import { createObj } from './objects.js';
 import { addDecor, addObstacle } from './props.js';
+import { buildLevelGeometry } from './geometry.js';
 
 /* ============================== Мир ============================== */
-export let map = null, world = null, H = 3.2, curLevel = 0;
-export const objs = new Map(); // id -> {o, group, parts}
+export let map = null, world = null, H = 3.2, curLevel = 0, water = null;
+export const objs = new Map(); // id -> {o, group, parts, baseY}
+let extraMats = [];
 
 function disposeWorld() {
   if (!world) return;
   scene.remove(world);
   world.traverse((o) => { if (o.geometry) o.geometry.dispose(); });
+  for (const m of extraMats) { if (m.map) m.map.dispose(); m.dispose(); }
+  extraMats = [];
   world = null;
   objs.clear();
 }
 
 export const G = { doorObj: null }; // служебные данные текущего уровня
 
-export function buildWorld(level, seed, objList) {
+// wl — текущие уровни воды с сервера (могут отличаться от начальных)
+export function buildWorld(level, seed, objList, wl) {
   disposeWorld();
   curLevel = level;
   const st = applyStyle(LEVELS[level].style);
   map = BR.generate(seed, level);
-  H = map.wallH;
+  if (wl) wl.forEach((v, i) => { map.wl[i] = v; });
+  H = map.FH;
   G.doorObj = null;
   world = new THREE.Group();
-  const ex = map.exit;
-
-  // Стены (только граничащие с полом; клетка двери считается проходом)
-  const g2 = map.g.slice();
-  g2[ex.ty * N + ex.tx] = 0;
-  const wallPos = [];
-  for (let ty = 0; ty < N; ty++) for (let tx = 0; tx < N; tx++) {
-    if (!map.g[ty * N + tx] || (tx === ex.tx && ty === ex.ty)) continue;
-    for (const [dx, dy] of BR.D4) {
-      const nx = tx + dx, ny = ty + dy;
-      if (nx >= 0 && ny >= 0 && nx < N && ny < N && !g2[ny * N + nx]) { wallPos.push([tx, ty]); break; }
-    }
-  }
-  const walls = new THREE.InstancedMesh(new THREE.BoxGeometry(TILE, H, TILE), mats.wall, wallPos.length);
-  const m4 = new THREE.Matrix4();
-  wallPos.forEach(([tx, ty], i) => { m4.setPosition((tx + 0.5) * TILE, H / 2, (ty + 0.5) * TILE); walls.setMatrixAt(i, m4); });
-  walls.instanceMatrix.needsUpdate = true; walls.frustumCulled = false;
-  world.add(walls);
-
-  const floor = new THREE.Mesh(new THREE.PlaneGeometry(N * TILE, N * TILE), mats.floor);
-  floor.rotation.x = -Math.PI / 2; floor.position.set(FULL / 2, 0, FULL / 2);
-  const ceil = new THREE.Mesh(new THREE.PlaneGeometry(N * TILE, N * TILE), mats.ceil);
-  ceil.rotation.x = Math.PI / 2; ceil.position.set(FULL / 2, H, FULL / 2);
-  world.add(floor, ceil);
-
-  // Потолочные лампы
-  const panels = [];
-  for (let ty = 0; ty < N; ty++) for (let tx = 0; tx < N; tx++) {
-    if (map.g[ty * N + tx]) continue;
-    const h = Math.sin(tx * 12.9898 + ty * 78.233 + seed) * 43758.5453;
-    if (st.panel.test(tx, ty, h - Math.floor(h))) panels.push([tx, ty]);
-  }
-  const panelGeo = new THREE.PlaneGeometry(st.panel.size, st.panel.size);
-  panelGeo.rotateX(Math.PI / 2);
-  const lights = new THREE.InstancedMesh(panelGeo, panelMat, panels.length);
-  panels.forEach(([tx, ty], i) => { m4.setPosition((tx + 0.5) * TILE, H - 0.02, (ty + 0.5) * TILE); lights.setMatrixAt(i, m4); });
-  lights.instanceMatrix.needsUpdate = true; lights.frustumCulled = false;
-  world.add(lights);
+  const geo = buildLevelGeometry(map, mats, st, seed, panelMat);
+  world.add(geo.group);
+  water = geo.water;
+  extraMats = geo.tileMats;
 
   // Объекты (дверь первой, чтобы терминал знал её направление)
   const sorted = objList.slice().sort((a, b) => (a.kind === 'door' ? -1 : 0) - (b.kind === 'door' ? -1 : 0));
@@ -73,10 +45,26 @@ export function buildWorld(level, seed, objList) {
   addDecor(world, LEVELS[level].style, seed);
   for (const o of map.obst || []) world.add(addObstacle(o));
   scene.add(world);
+  return map;
 }
 
-function addObj(o) {
+export function addObj(o) {
   const rec = createObj(o);
+  rec.baseY = o.y || 0;
+  rec.group.position.y += rec.baseY;
   world.add(rec.group);
   objs.set(o.id, rec);
+}
+
+export function removeObj(id) {
+  const rec = objs.get(id);
+  if (rec) { world.remove(rec.group); objs.delete(id); }
+}
+
+// Сервер изменил уровень воды
+export function setWater(levels) {
+  if (!map) return;
+  levels.forEach((v, i) => { map.wl[i] = v; });
+  map.navDirty = true;
+  if (water) water.update();
 }

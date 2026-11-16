@@ -10,7 +10,9 @@ class Client {
     this.id = nextClientId++;
     this.joined = false;
     this.name = 'Игрок';
-    this.x = 0; this.z = 0; this.r = 0;
+    this.x = 0; this.y = 0; this.z = 0; this.r = 0;
+    this.node = -1;      // последний узел графа навигации, где стоял игрок
+    this.crouch = false;
     this.fl = false;
     this.invuln = 0;
     this.codeTries = 0;

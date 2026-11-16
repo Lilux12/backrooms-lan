@@ -67,7 +67,7 @@ export function setPlayers(list) {
     else {
       const mesh = makeAvatar(p.id, p.name);
       mesh.visible = false; scene.add(mesh);
-      remotes.set(p.id, { mesh, parts: mesh.userData.parts, x: 0, z: 0, r: 0, tx: 0, tz: 0, tr: 0, name: p.name, seen: false, fl: false, walk: 0 });
+      remotes.set(p.id, { mesh, parts: mesh.userData.parts, x: 0, y: 0, z: 0, r: 0, tx: 0, ty: 0, tz: 0, tr: 0, crouch: false, name: p.name, seen: false, fl: false, walk: 0 });
     }
   }
   for (const [id, r] of remotes) if (!ids.has(id)) { scene.remove(r.mesh); remotes.delete(id); }
@@ -78,14 +78,15 @@ export function setPlayers(list) {
 export function updateRemotes(dt) {
   const k = 1 - Math.exp(-12 * dt);
   for (const r of remotes.values()) {
-    r.x += (r.tx - r.x) * k; r.z += (r.tz - r.z) * k; r.r = lerpAngle(r.r, r.tr, k);
+    r.x += (r.tx - r.x) * k; r.y += (r.ty - r.y) * k; r.z += (r.tz - r.z) * k; r.r = lerpAngle(r.r, r.tr, k);
     const spd = Math.hypot(r.tx - r.x, r.tz - r.z) * k / Math.max(dt, 0.001);
     r.walk += dt * clamp(spd, 0, 7) * 2.1;
     const am = clamp(spd / 3.5, 0, 1), swg = Math.sin(r.walk) * 0.7 * am;
     r.parts.armL.rotation.x = swg; r.parts.armR.rotation.x = -swg * 0.4 - 0.9 * (r.fl ? 1 : 0);
     r.parts.legL.rotation.x = -swg; r.parts.legR.rotation.x = swg;
     r.parts.torch.visible = r.parts.beam.visible = r.parts.beamGlow.visible = r.fl;
-    r.mesh.position.set(r.x, Math.abs(Math.sin(r.walk)) * 0.04 * am, r.z);
+    r.mesh.position.set(r.x, r.y + Math.abs(Math.sin(r.walk)) * 0.04 * am, r.z);
+    r.mesh.scale.y += ((r.crouch ? 0.6 : 1) - r.mesh.scale.y) * k; // присед
     r.mesh.rotation.y = r.r + Math.PI;
   }
 }

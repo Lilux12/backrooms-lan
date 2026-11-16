@@ -70,7 +70,7 @@ function makeMob(type) {
     g.add(body, parts.legL, parts.legR);
   }
   g.visible = false; scene.add(g);
-  return { group: g, parts, type, x: 0, z: 0, r: 0, tx: 0, tz: 0, tr: 0, chase: false, stun: false, seen: false, walk: 0 };
+  return { group: g, parts, type, x: 0, y: 0, z: 0, r: 0, tx: 0, ty: 0, tz: 0, tr: 0, chase: false, stun: false, seen: false, walk: 0 };
 }
 export function ensureMobs(n, type) {
   if (type && type !== mobType) { while (mobEnts.length) scene.remove(mobEnts.pop().group); mobType = type; }
@@ -86,11 +86,11 @@ export function updateMobs(dt) {
     if (!mo.seen) continue;
     const dx = mo.tx - mo.x, dz = mo.tz - mo.z;
     const sp = Math.hypot(dx, dz) / Math.max(dt, 0.001);
-    mo.x += dx * k; mo.z += dz * k;
+    mo.x += dx * k; mo.y += (mo.ty - mo.y) * k; mo.z += dz * k;
     mo.r = lerpAngle(mo.r, mo.tr, 1 - Math.exp(-8 * dt));
     const run = mo.type === 'runner';
     mo.walk += dt * clamp(sp, 0, 7) * (run ? 1.9 : 1.4);
-    mo.group.position.set(mo.x, 0, mo.z);
+    mo.group.position.set(mo.x, mo.y, mo.z);
     mo.group.rotation.y = mo.r;
     const amp = clamp(sp / 3, 0.15, 1);
     const sw = Math.sin(mo.walk) * (run ? 1.0 : 0.55) * amp;
@@ -105,7 +105,7 @@ export function updateMobs(dt) {
     }
     mo.parts.legL.rotation.x = -sw * 0.8; mo.parts.legR.rotation.x = sw * 0.8;
     mo.group.visible = !mo.stun;
-    if (!mo.stun) mobDist = Math.min(mobDist, Math.hypot(mo.x - me.x, mo.z - me.z));
+    if (!mo.stun) mobDist = Math.min(mobDist, Math.hypot(mo.x - me.x, (mo.y - me.y) * 2, mo.z - me.z));
   }
   return mobDist;
 }

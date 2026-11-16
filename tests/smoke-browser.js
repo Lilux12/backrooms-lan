@@ -53,7 +53,8 @@ async function main() {
     for (const level of levels) await runLevel(port, level);
   } finally {
     br.kill();
-    fs.rmSync(prof, { recursive: true, force: true });
+    await sleep(300);
+    try { fs.rmSync(prof, { recursive: true, force: true, maxRetries: 5, retryDelay: 200 }); } catch (e) { /* Chromium ещё держит файлы — не страшно */ }
   }
 }
 
@@ -69,7 +70,7 @@ async function startBot(port) {
   const timer = setInterval(() => {
     if (!spawn) return;
     t += 0.05;
-    ws.send(JSON.stringify({ t: 'p', x: spawn.x + Math.sin(t) * 0.5, z: spawn.z, r: t, f: 1 }));
+    ws.send(JSON.stringify({ t: 'p', x: spawn.x + Math.sin(t) * 0.5, y: spawn.y, z: spawn.z, r: t, f: 1 }));
   }, 50);
   return () => { clearInterval(timer); ws.close(); };
 }

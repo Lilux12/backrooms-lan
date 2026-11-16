@@ -8,7 +8,6 @@
 //   tick(G, players, dt)        — вызывается каждый тик (вернуть true, если цели изменились)
 // Чтобы добавить головоломку: опишите её здесь и укажите имя в LEVELS[i].puzzles (shared/map.js).
 const BR = require('../shared/map.js');
-const { TILE, N } = BR;
 const { broadcast, log } = require('./clients');
 
 const LATCH = 22;            // сколько секунд держится нажатая плита
@@ -21,6 +20,9 @@ const LEVER_COLORS = [
   { name: 'ЖЁЛТЫЙ', riddle: 'цвет стен, с которых всё началось' },
 ];
 
+// Рядом ли игрок с объектом: по горизонтали ближе r и на том же уровне по высоте
+const near = (o, p, r) => Math.hypot(o.x - p.x, o.z - p.z) < r && Math.abs((o.y || 0) - p.y) < 1.8;
+
 // Изменить объект и разослать изменение всем
 function patch(o, p) { Object.assign(o, p); broadcast({ t: 'obj', id: o.id, p }); }
 
@@ -30,16 +32,16 @@ const PUZZLES = {
     init: (cfg) => ({ need: cfg.fuses || 0, inserted: 0, held: 0, solved: false }),
     setup(G, add, rnd) {
       const maxD = G.map.maxDist;
-      BR.pickSpots(G.map, rnd, G.cfg.fuses, { minDist: 0.25 * maxD, minSep: 6 }).forEach((p) => add('fuse', { x: p.x, z: p.z }));
+      BR.pickSpots(G.map, rnd, G.cfg.fuses, { minDist: 0.25 * maxD, minSep: 6 }).forEach((p) => add('fuse', { x: p.x, y: p.y, z: p.z }));
       const b = BR.pickSpots(G.map, rnd, 1, { minDist: 0.15 * maxD, maxDist: 0.65 * maxD })[0];
-      add('box', { x: b.x, z: b.z });
+      add('box', { x: b.x, y: b.y, z: b.z });
     },
     goal: (G) => {
       const f = G.pz.fuses;
       return `Предохранители: ${f.inserted}/${f.need}` + (f.held ? ` (в руках: ${f.held})` : '') + (f.solved ? ' ✔' : '');
     },
     touch(G, p, o) {
-      if (o.kind !== 'fuse' || Math.hypot(o.x - p.x, o.z - p.z) >= PICK_DIST) return false;
+      if (o.kind !== 'fuse' || !near(o, p, PICK_DIST)) return false;
       removeObj(G, o);
       G.pz.fuses.held++;
       broadcast({ t: 'pick', id: o.id, kind: 'fuse', by: p.name });
@@ -67,12 +69,12 @@ const PUZZLES = {
       for (let i = 0; i < 4; i++) digits.push(1 + Math.floor(rnd() * 9));
       G.pz.code.digits = digits;
       BR.pickWallSpots(G.map, rnd, 4, { minDist: 0.2 * G.map.maxDist, minSep: 7 })
-        .forEach((p, i) => add('digit', { x: p.x, z: p.z, nx: p.nx, nz: p.nz, idx: i, digit: digits[i] }));
-      add('keypad', { x: G.map.exit.fx, z: G.map.exit.fz });
+        .forEach((p, i) => add('digit', { x: p.x, y: p.y, z: p.z, nx: p.nx, nz: p.nz, idx: i, digit: digits[i] }));
+      add('keypad', { x: G.map.exit.fx, y: G.map.exit.y, z: G.map.exit.fz });
     },
     goal: (G) => 'Код: ' + G.pz.code.found.map((d) => (d == null ? '_' : d)).join(' ') + (G.pz.code.solved ? ' ✔' : ''),
     touch(G, p, o) {
-      if (o.kind !== 'digit' || G.pz.code.found[o.idx] != null || Math.hypot(o.x - p.x, o.z - p.z) >= DIGIT_DIST) return false;
+      if (o.kind !== 'digit' || G.pz.code.found[o.idx] != null || !near(o, p, DIGIT_DIST)) return false;
       G.pz.code.found[o.idx] = o.digit;
       broadcast({ t: 'ev', text: `${p.name} нашёл цифру: ${o.digit} (позиция ${o.idx + 1})` });
       return true;
@@ -84,13 +86,14 @@ const PUZZLES = {
     init: () => ({ solved: false }),
     setup(G, add, rnd) {
       const map = G.map;
+      // вторая плита — в 9–16 шагах по графу от первой: один игрок успевает добежать за LATCH секунд
       const a = BR.pickSpots(map, rnd, 1, { minDist: 0.3 * map.maxDist })[0];
-      const da = BR.bfs(map.g, a.tile % N, (a.tile / N) | 0);
-      let cand = map.floors.filter((i) => da[i] >= 9 && da[i] <= 16 && map.dist[i] >= 0.2 * map.maxDist);
-      if (!cand.length) cand = map.floors.filter((i) => da[i] >= 6 && da[i] <= 18);
-      const bi = cand[Math.floor(rnd() * cand.length)];
-      add('plate', { x: a.x, z: a.z, on: false, hold: 0 });
-      add('plate', { x: ((bi % N) + 0.5) * TILE, z: (((bi / N) | 0) + 0.5) * TILE, on: false, hold: 0 });
+      const da = BR.bfsNav(BR.ensureNav(map), a.node);
+      let cand = map.spots.filter((n) => da[n] >= 9 && da[n] <= 16 && map.dist[n] >= 0.2 * map.maxDist);
+      if (!cand.length) cand = map.spots.filter((n) => da[n] >= 6 && da[n] <= 18 && n !== a.node);
+      const b = BR.spotOf(map, cand[Math.floor(rnd() * cand.length)]);
+      add('plate', { x: a.x, y: a.y, z: a.z, on: false, hold: 0 });
+      add('plate', { x: b.x, y: b.y, z: b.z, on: false, hold: 0 });
     },
     goal: (G) => `Плиты нажаты: ${G.objs.filter((o) => o.kind === 'plate' && o.on).length}/2` + (G.pz.plates.solved ? ' ✔' : ''),
     tick(G, players, dt) {
@@ -98,7 +101,7 @@ const PUZZLES = {
       let changed = false;
       const plates = G.objs.filter((o) => o.kind === 'plate');
       for (const pl of plates) {
-        const pressed = players.some((p) => Math.hypot(pl.x - p.x, pl.z - p.z) < 1.5);
+        const pressed = players.some((p) => near(pl, p, 1.5));
         const was = pl.on;
         pl.hold = pressed ? LATCH : Math.max(0, pl.hold - dt);
         const on = pl.hold > 0;
@@ -124,9 +127,9 @@ const PUZZLES = {
       lv.text = 'Порядок смены давления:\n' + order.map((c, i) => `${i + 1}) ${LEVER_COLORS[c].riddle}`).join('\n') +
         '\n\nОшибёшься — включится сирена.';
       const maxD = G.map.maxDist;
-      BR.pickSpots(G.map, rnd, 4, { minDist: 0.25 * maxD, minSep: 7 }).forEach((p, i) => add('lever', { x: p.x, z: p.z, col: i, on: false }));
+      BR.pickSpots(G.map, rnd, 4, { minDist: 0.25 * maxD, minSep: 7 }).forEach((p, i) => add('lever', { x: p.x, y: p.y, z: p.z, col: i, on: false }));
       const n = BR.pickWallSpots(G.map, rnd, 1, { minDist: 0.1 * maxD, maxDist: 0.5 * maxD })[0];
-      add('note', { x: n.x, z: n.z, nx: n.nx, nz: n.nz });
+      add('note', { x: n.x, y: n.y, z: n.z, nx: n.nx, nz: n.nz });
     },
     goal: (G) => `Рычаги: ${G.pz.levers.progress}/4` + (G.pz.levers.solved ? ' ✔' : ''),
     use(G, c, o) {
@@ -143,7 +146,7 @@ const PUZZLES = {
         lv.progress = 0;
         for (const l of G.objs.filter((q) => q.kind === 'lever' && q.on)) patch(l, { on: false });
         broadcast({ t: 'ev', text: `${c.name} ошибся с рычагом — СИРЕНА!` });
-        alarm(G, c.x, c.z);
+        alarm(G, c.x, c.y, c.z);
       }
       sendGoals(G); checkSolved(G);
       return true;
@@ -175,15 +178,17 @@ function checkSolved(G) {
 }
 
 // Сирена: все существа идут к точке шума
-function alarm(G, x, z) {
-  for (const m of G.mobs) { m.alert = { x, z, t: 15 }; if (m.stun > 1) m.stun = 1; }
+function alarm(G, x, y, z) {
+  const node = BR.nodeAt(G.map, x, y, z);
+  if (node < 0) return;
+  for (const m of G.mobs) { m.alert = { node, t: 15 }; if (m.stun > 1) m.stun = 1; }
   broadcast({ t: 'alarm' });
 }
 
 // Ввод кода на терминале (отдельное сообщение 'code')
 function enterCode(G, c, value) {
   const kp = G.objs.find((q) => q.kind === 'keypad');
-  if (!kp || G.pz.code.solved || Math.hypot(kp.x - c.x, kp.z - c.z) > 4.5) return;
+  if (!kp || G.pz.code.solved || !near(kp, c, 4.5)) return;
   if (String(value || '') === G.pz.code.digits.join('')) {
     G.pz.code.solved = true;
     c.send({ t: 'codeok' });
@@ -193,8 +198,8 @@ function enterCode(G, c, value) {
   } else {
     c.send({ t: 'codebad' });
     broadcast({ t: 'ev', text: `Неверный код! Сработала сигнализация (${c.name})` });
-    alarm(G, c.x, c.z);
+    alarm(G, c.x, c.y, c.z);
   }
 }
 
-module.exports = { PUZZLES, patch, removeObj, goalLines, sendGoals, checkSolved, enterCode, PICK_DIST };
+module.exports = { PUZZLES, patch, removeObj, goalLines, sendGoals, checkSolved, enterCode, near, PICK_DIST };

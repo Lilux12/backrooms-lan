@@ -71,6 +71,11 @@ export function updateHud(dt, prox) {
   $('bat').style.width = `${FL.bat * 100}%`;
   $('bat').style.background = FL.bat < 0.15 ? '#e0603a' : '#8fd0ff';
   $('batTxt').textContent = `${FL.on ? 'ВКЛ ' : ''}${Math.round(FL.bat * 100)}%`;
+  const o2 = me.o2 == null ? 1 : me.o2;
+  $('o2row').style.display = o2 < 0.999 ? 'block' : 'none';
+  $('o2').style.width = `${o2 * 100}%`;
+  $('o2').style.background = o2 < 0.25 ? '#e0603a' : '#9fe6ff';
+  $('o2Txt').textContent = `${Math.round(o2 * 100)}%`;
   hudTimer -= dt;
   if (hudTimer <= 0) {
     hudTimer = 0.05;

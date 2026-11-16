@@ -7,7 +7,7 @@ export const S = {
   bigOn: false, mmOn: true, alarmUntil: 0,
   time: 0, // игровое время в секундах (для анимаций)
 };
-export const me = { x: 0, z: 0, yaw: 0, pitch: 0, stamina: 1, exhausted: false, bob: 0, stepPhase: 0, fov: 75 };
+export const me = { x: 0, y: 0, z: 0, yaw: 0, pitch: 0, stamina: 1, exhausted: false, bob: 0, stepPhase: 0, fov: 75, body: null, o2: 1, stunned: 0, shake: 0 };
 export const keypad = { open: false, buf: '' };
 export const UP = { map: false };
 export const FL = { on: false, bat: 1, k: 0 };
