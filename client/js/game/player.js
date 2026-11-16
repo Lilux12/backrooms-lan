@@ -48,7 +48,7 @@ export function updateMovement(dt) {
   if (!(S.joined && map && me.body)) return { moving, sprint };
   const b = me.body;
   const md = myMods();
-  const active = S.locked && !keypad.open && !S.bigOn && !social.caged && !md.frozen && !S.adminOpen;
+  const active = S.locked && !keypad.open && !S.bigOn && !social.caged && !md.frozen && !S.adminOpen && !S.hiding;
   let ix = 0, iz = 0;
   if (active) {
     if (keys.KeyW || keys.ArrowUp) iz += 1;
@@ -139,7 +139,7 @@ export function updateCamera(dt, moving, sprint) {
 
 // Батарея фонарика: садится при работе, сама восстанавливается
 export function updateBattery(dt) {
-  if (FL.on) { FL.bat -= dt / 200; if (FL.bat <= 0) { FL.bat = 0; FL.on = false; sfx.fl(); toast('Батарея фонарика села — подождите, она восстановится', 3000); } }
+  if (FL.on) { FL.bat -= dt / (S.modifier === 'drain' ? 100 : 200); if (FL.bat <= 0) { FL.bat = 0; FL.on = false; sfx.fl(); toast('Батарея фонарика села — подождите, она восстановится', 3000); } }
   else FL.bat = Math.min(1, FL.bat + dt / 150);
 }
 

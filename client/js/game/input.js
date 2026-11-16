@@ -12,6 +12,7 @@ import { onSpectatorKey, placeMarkAhead, spec } from './spectator.js';
 import { toggleAdmin } from '../ui/admin.js';
 import { toggleJournal } from '../ui/journal.js';
 import { key } from '../core/settings.js';
+import { sendEmote, toggleNV, togglePhoto } from './extras.js';
 
 addEventListener('keydown', (e) => {
   if (keypad.open) {
@@ -36,6 +37,11 @@ addEventListener('keydown', (e) => {
   keys[e.code] = true;
   if (e.code === 'KeyH') { S.mmOn = !S.mmOn; $('minimapWrap').style.display = S.mmOn ? 'block' : 'none'; }
   if (e.code === 'F3') { e.preventDefault(); S.perfOn = !S.perfOn; return; }
+  if (S.photo && (e.code === 'Enter' || e.code === 'NumpadEnter')) { S.wantShot = true; return; }
+  if (e.code === 'KeyP' && S.joined && !e.repeat) { togglePhoto(); return; }
+  if (S.joined && S.locked && !e.repeat && !spec.dead && /^Digit[1-4]$/.test(e.code)) { sendEmote(+e.code.slice(-1) - 1); return; }
+  if (e.code === 'KeyN' && S.joined && S.locked && !e.repeat && !spec.dead) { toggleNV(); return; }
+  if (S.hiding && e.code === key('use') && !e.repeat) { sendNet({ t: 'unhide' }); return; }
   if (e.code === key('journal') && S.joined && !e.repeat) { toggleJournal(); return; }
   if (e.code === key('torch') && S.joined && S.locked && !e.repeat && !spec.dead) toggleTorch();
   if (e.code === key('map') && S.joined && S.locked && !e.repeat) toggleBigMap();

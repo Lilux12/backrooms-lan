@@ -7,7 +7,8 @@ const { attachWebSocket } = require('./ws');
 const { Client } = require('./clients');
 const game = require('./game');
 
-const server = createHttpServer();
+const records = require('./records');
+const server = createHttpServer({ '/records.json': records.table });
 attachWebSocket(server, (socket) => new Client(socket, game.onMessage, game.onLeave));
 
 game.startLevel(config.START_LEVEL);

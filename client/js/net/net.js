@@ -10,6 +10,7 @@ import { playAt, sfx, tone } from '../audio/audio.js';
 import { caption, closeKeypad, hideBanner, renderGoals, setStatus, showBanner, showLevelTitle, showNote, toast, updateKeypad } from '../ui/hud.js';
 import { beginPlay, noteProgress } from '../ui/menu.js';
 import { addJournal } from '../ui/journal.js';
+import { checkReader, onAch, onDirectorEvent, onEmote, onHide, onUnhide, unlock } from '../game/extras.js';
 import { placeMe } from '../game/player.js';
 import { onSocialNet, social } from '../game/social.js';
 import { onSpectatorNet, spec } from '../game/spectator.js';
@@ -27,7 +28,11 @@ export function connect(name) {
   }
   myName = name;
   ws = new WebSocket(`ws://${location.host}`);
-  ws.onopen = () => { tries = 0; ws.send(JSON.stringify({ t: 'join', name, token: adminToken() || undefined })); };
+  ws.onopen = () => {
+    tries = 0;
+    const color = parseInt((localStorage.getItem('br_color') || '#6aa0ff').slice(1), 16);
+    ws.send(JSON.stringify({ t: 'join', name, token: adminToken() || undefined, role: localStorage.getItem('br_role') || '', color }));
+  };
   ws.onmessage = (e) => onNet(JSON.parse(e.data));
   ws.onclose = () => {
     const was = S.joined;
@@ -78,6 +83,8 @@ function onNet(m) {
       for (const o of m.obst || []) addObstacleNet(o);
       S.cctvUntil = 0; S.blackoutUntil = 0; S.finale = false; S.powered = !!m.powered;
       S.countdownEnd = 0; S.drumUntil = 0; S.drawingsAlive = false; $('countdown').classList.remove('on');
+      S.modifier = m.modifier || ''; S.difficulty = m.difficulty || 'normal'; S.role = m.role || ''; S.myDeaths = 0; S.hiding = null;
+      $('lockerfx').classList.remove('on');
       $('game').classList.remove('drawings', 'quarantine'); $('gasfx').classList.remove('on');
       hideBanner(); renderGoals();
       showLevelTitle(m.level);
@@ -134,7 +141,16 @@ function onNet(m) {
       }
       break;
     }
-    case 'note': showNote(m.text, m.title); addJournal(m.title || 'Записка', m.text); break;
+    case 'note': {
+      showNote(m.text, m.title); addJournal(m.title || 'Записка', m.text);
+      for (const rec of objs.values()) if (rec.o.kind === 'lore' && rec.o.title === m.title) { rec.o._read = true; if (rec.o.egg) unlock('egg'); }
+      checkReader();
+      break;
+    }
+    case 'hide': onHide(m); break;
+    case 'unhide': onUnhide(m); break;
+    case 'emote': onEmote(m); break;
+    case 'ach': onAch(m); break;
     case 'cell': setCellLocal(m.f, m.i, m.type, m.aux); break;
     case 'correct': placeMe(m.x, m.y, m.z); break; // сервер не принял перемещение (античит/рассинхрон)
     case 'codeok': closeKeypad(); sfx.beep(); break;
@@ -168,6 +184,11 @@ function onNet(m) {
       S.countdownEnd = 0; S.drumUntil = 0; $('countdown').classList.remove('on');
       const st = m.stats || {};
       const stats = `<span class="endstats">время ${Math.floor((st.time || 0) / 60)}:${String((st.time || 0) % 60).padStart(2, '0')} · смертей ${st.deaths || 0} · записок ${st.notes || 0}` + (st.exposed ? ` · двойников разоблачено ${st.exposed}` : '') + '</span>';
+      // достижения за уровень
+      unlock('first');
+      if (!S.myDeaths) unlock('nodeath');
+      if ((st.time || 999) < 180) unlock('speed');
+      if (m.last) unlock(m.ending === 'stay' ? 'stay' : 'escape');
       let html;
       if (!m.last) html = `УРОВЕНЬ ПРОЙДЕН<br><small>Дальше: ${m.next}</small>${stats}`;
       else if (m.ending === 'stay') html = `${m.by || 'Кто-то'} ОСТАЛСЯ НАДСМОТРЩИКОМ<br><small>Кресло тёплое. Пульт гудит. Где-то загорелись жёлтые лампы, и новые люди проснулись на мокром ковре.<br>Фабрика будет работать вечно — теперь её строите вы.<br>Игра начнётся заново.</small>${stats}`;
@@ -189,6 +210,7 @@ function onNet(m) {
 // События уровня от сервера: свет гаснет, тряска, пар, пролом, финальный побег
 function onEvent(m) {
   const now = performance.now() / 1000;
+  if (onDirectorEvent(m)) return; // шёпот, шаги, лицо в обоях, звонок, мигание
   switch (m.k) {
     case 'blackout': S.blackoutUntil = now + (m.dur || 3); sfx.zap(); toast('Перегрузка! Свет погас…', 2500); break;
     case 'quake': me.shake = Math.max(me.shake || 0, 0.4 * (m.dur || 1)); sfx.rumble(); break;

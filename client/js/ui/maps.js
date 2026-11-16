@@ -119,7 +119,9 @@ function markDots(ctx, X, Y, r) {
 export function drawMinimap() {
   if (!S.mmOn || !map) return;
   const pal = MAPPAL[LEVELS[curLevel].style] || MAPPAL.yellow;
-  const R = UP.map ? 16 : 9, s = mm.width, cell = s / (R * 2 + 1);
+  if (S.modifier === 'nomap') { $('minimapWrap').style.opacity = '0'; return; }
+  $('minimapWrap').style.opacity = '';
+  const R = UP.map ? 16 : S.role === 'scout' ? 12 : 9, s = mm.width, cell = s / (R * 2 + 1);
   const px = me.x / TILE, pz = me.z / TILE, fl = myFloor();
   const X = (wx) => (wx / TILE - px) * cell + s / 2, Y = (wz) => (wz / TILE - pz) * cell + s / 2;
   mg.fillStyle = pal[2]; mg.fillRect(0, 0, s, s);

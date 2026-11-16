@@ -8,8 +8,10 @@ const ENTRY = require(path.join(ROOT, 'package.json')).main;
 
 function startServer(port, env = {}) {
   return new Promise((resolve, reject) => {
+    // рекорды тестов — во временный файл, чтобы не портить настоящую таблицу игрока
+    const rec = path.join(require('os').tmpdir(), `br-test-records-${port}.json`);
     const proc = spawn(process.execPath, [path.join(ROOT, ENTRY)], {
-      env: Object.assign({}, process.env, { PORT: String(port) }, env),
+      env: Object.assign({}, process.env, { PORT: String(port), RECORDS_FILE: rec }, env),
       stdio: ['ignore', 'pipe', 'pipe'],
     });
     let out = '';

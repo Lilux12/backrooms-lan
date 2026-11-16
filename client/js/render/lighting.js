@@ -64,6 +64,8 @@ export function updateLight(dt) {
   let k = flick.k * (0.97 + 0.03 * Math.sin(S.time * 90)) * lightMul(); // хост может менять свет
   if (LIGHT.pulse) k *= 0.78 + 0.22 * Math.sin(S.time * 3.2);
   if (performance.now() / 1000 < (S.blackoutUntil || 0)) k *= 0.04; // перегрузка: свет погас
+  if (performance.now() / 1000 < (S.flickerUntil || 0)) k *= Math.random() < 0.5 ? 0.15 : 1; // «режиссёр»: свет мигает
+  if (S.modifier === 'dark') k *= 0.5;
   if (curStyle && curStyle.unpowered && !S.powered) k *= 0.22;       // здание обесточено, пока не запустят генератор
   const alarm = performance.now() / 1000 < S.alarmUntil;
   if (alarm) k *= 0.6 + 0.4 * Math.abs(Math.sin(S.time * 6));
@@ -71,7 +73,7 @@ export function updateLight(dt) {
   let tf = 1;
   if (FL.on && FL.bat < 0.15 && Math.random() < 0.25) tf = rand(0.1, 0.7);
   torch.intensity = 36 * FL.k * tf * (0.55 + 0.45 * Math.min(1, FL.bat * 6)) * (0.9 + 0.1 * k);
-  scene.fog.density = LIGHT.fogD * (1 - 0.22 * FL.k) * fogMul();
+  scene.fog.density = LIGHT.fogD * (1 - 0.22 * FL.k) * fogMul() * (S.modifier === 'fog' ? 1.6 : 1);
   hemi.intensity = LIGHT.hemi * k; sun.intensity = LIGHT.sun * k; lamp.intensity = LIGHT.lamp * k;
   const p = LIGHT.panel;
   panelMat.color.setRGB(p[0] * k, p[1] * k, p[2] * k);

@@ -8,7 +8,7 @@ import { openKeypad } from '../ui/hud.js';
 
 /* ---------- Взаимодействие ---------- */
 const INTERACTIVE = ['box', 'lever', 'note', 'keypad', 'valve', 'drain', 'paper', 'lore', 'pump', 'cage', 'altar',
-  'switch', 'steamvalve', 'radio', 'monitor', 'lift', 'musicbox', 'furnace', 'mixer', 'ending', 'phone', 'shelf', 'genroof', 'reagent', 'keyslot', 'cardreader', 'puzzleboard', 'pipevalve'];
+  'switch', 'steamvalve', 'radio', 'monitor', 'lift', 'musicbox', 'furnace', 'mixer', 'ending', 'phone', 'shelf', 'genroof', 'reagent', 'keyslot', 'cardreader', 'puzzleboard', 'pipevalve', 'locker'];
 export function nearestUsable() {
   let best = null, bd = 3.2;
   for (const rec of objs.values()) {
@@ -44,6 +44,7 @@ export function promptFor(o) {
     case 'keyslot': return '<b>E</b> Ключница: повесить ключи';
     case 'phone': return '<b>E</b> Снять трубку';
     case 'genroof': return '<b>E</b> Завести генератор';
+    case 'locker': return o.who ? 'Шкафчик занят' : '<b>E</b> Спрятаться в шкафчик';
     case 'cardreader': return `<b>E</b> Считыватель: ${{ blue: 'синий', yellow: 'жёлтый', red: 'красный' }[o.group]} допуск`;
     case 'mixer': return '<b>E</b> Станция смешивания';
     case 'reagent': return `<b>E</b> Добавить реагент «${o.name}»`;

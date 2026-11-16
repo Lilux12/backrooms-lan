@@ -210,7 +210,7 @@ function viewCos(p, x, z) {
 function chaseSpeed(G, m, def) {
   let k = BASE_SPEED * G.cfg.mobSpeed * (G.mobMul || 1) * (G.finaleMul || 1) * def.speed * (m.boss && m.type !== 'overseer' ? 1.5 : 1);
   if (m.type === 'specimen') k *= [0.75, 0.75, 1.05, 1.35][G.specimenPhase || 1];
-  if (G.cfg.chase && G.chaseT) k *= 1 + Math.min(0.3, G.chaseT / 150); // стая разгоняется
+  if (G.cfg.chase && G.chaseT) k *= 1 + Math.min(0.18, G.chaseT / 150); // стая разгоняется — до скорости бега игрока
   return k;
 }
 
@@ -222,8 +222,9 @@ function perceive(G, m, def, players) {
     if (p.node < 0) continue;
     const d = dist3(p, m);
     const running = (p.spd || 0) > RUN_SPD;
-    let ok = d < (p.crouch ? def.near * 0.4 : def.near);
-    if (!ok && def.runHear && running && d < def.runHear) ok = true;
+    const hear = G.hearMul || 1;
+    let ok = d < (p.crouch ? def.near * 0.4 : def.near) * hear;
+    if (!ok && def.runHear && running && d < def.runHear * hear) ok = true;
     if (!ok && def.heat && p.fl && d < def.heat * heatK) ok = true;
     if (!ok && def.see) {
       const range = p.fl ? def.seeTorch : def.see;

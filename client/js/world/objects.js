@@ -546,6 +546,24 @@ export function createObj(o) {
       grp.position.set(o.x, 0, o.z); rec.parts = { halo };
       break;
     }
+    case 'locker': {
+      // металлический шкафчик у стены: можно спрятаться (сквозь щели видно комнату)
+      const steel = lam(0x5a6670, 0x0a0c0e), dark = lam(0x1a1e22);
+      const g2 = new THREE.Group();
+      g2.add(bx(1.0, 2.1, 0.7, steel, 0, 1.05, 0), bx(0.9, 1.9, 0.02, lam(0x6a7680), 0, 1.0, 0.36));
+      for (let k = 0; k < 6; k++) g2.add(bx(0.5, 0.03, 0.01, dark, 0, 1.6 + k * 0.06, 0.375));
+      g2.add(bx(0.05, 0.15, 0.04, lam(0xb0b4b8), 0.35, 1.0, 0.39));
+      g2.rotation.y = Math.atan2(o.nx || 0, o.nz || 0);
+      grp.add(g2);
+      grp.position.set(o.x - (o.nx || 0) * 0.15, 0, o.z - (o.nz || 0) * 0.15);
+      break;
+    }
+    case 'egg': {
+      // «4813-я лампа»: лампа, которая не гудит
+      grp.add(bx(1.2, 0.08, 0.3, lam(0xd8d0b0), 0, 0, 0), bx(1.1, 0.04, 0.22, new THREE.MeshBasicMaterial({ color: 0xfff8d0 }), 0, -0.05, 0), glowSprite(0xfff4c0, 2.2, 0.6));
+      grp.position.set(o.x, 1.2, o.z); rec.bob = true;
+      break;
+    }
     case 'door': {
       G.doorObj = o;
       const alongX = o.dx !== 0;

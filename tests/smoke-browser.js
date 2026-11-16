@@ -132,6 +132,12 @@ async function runLevel(cdpPort, level) {
     await key('KeyJ'); await sleep(200);
     assert(await ev(`document.getElementById('journal').style.display === 'block'`), `уровень ${level}: дневник не открылся`);
     await key('KeyJ');
+    // ночное видение, реплика, фоторежим
+    await key('KeyN'); await sleep(300); await key('KeyN');
+    await key('Digit1');
+    await key('KeyP'); await sleep(200);
+    assert(await ev(`document.getElementById('photofx').classList.contains('on') && document.getElementById('hud').style.visibility === 'hidden'`), `уровень ${level}: фоторежим не включился`);
+    await key('KeyP');
     // пресеты качества переключаются на лету без ошибок (на первом уровне прогона)
     if (level === levelsRun[0]) {
       for (const p of ['low', 'ultra', 'high']) {

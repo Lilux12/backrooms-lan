@@ -18,6 +18,8 @@
 <div class="layer"><canvas id="grain" width="160" height="90"></canvas></div>
 <div id="crosshair"></div>
 <div id="perf"></div>
+<div id="lockerfx" class="layer"></div>
+<div id="photofx" class="layer"><div id="photoCap"></div><small>P — выйти · Enter — сохранить снимок</small></div>
 <div id="subs"></div>
 
 <div id="vhsfx" class="layer"></div>
@@ -34,6 +36,9 @@
     <div class="bar"><div id="stamina"></div></div>
     <div class="row"><span><kbd>F</kbd> ФОНАРЬ</span><span id="batTxt">100%</span></div>
     <div class="bar" style="margin-bottom:0"><div id="bat"></div></div>
+    <div class="row" style="margin-top:9px"><span>ШУМ</span><span id="noiseTxt">тихо</span></div>
+    <div class="bar" style="margin-bottom:0"><div id="noise"></div></div>
+    <div class="row" id="nvRow" style="margin-top:9px;display:none"><span><kbd>N</kbd> КАМЕРА</span><span id="nvTxt"></span></div>
     <div id="o2row"><div class="row" style="margin-top:9px"><span>ВОЗДУХ</span><span id="o2Txt"></span></div>
     <div class="bar" style="margin-bottom:0"><div id="o2"></div></div></div>
   </div>
@@ -70,6 +75,10 @@
         <div class="card">
           <h4>ВХОД</h4>
           <input type="text" id="name" maxlength="16" placeholder="Ваш ник" autocomplete="off">
+          <div class="lobby">
+            <label>Роль <select id="role"><option value="">без роли</option><option value="scout">Разведчик: быстрее, миникарта шире</option><option value="mechanic">Механик: переключатели держатся дольше</option><option value="medic">Медик: аптечка на каждом уровне</option></select></label>
+            <label>Цвет <input type="color" id="color" value="#6aa0ff"></label>
+          </div>
           <button id="play">ИГРАТЬ</button>
           <div id="status"></div>
           <button id="stuck" class="small" style="display:none">Я застрял — вернуться к началу уровня</button>
@@ -92,6 +101,9 @@
             <span><kbd>Z</kbd> / <kbd>X</kbd></span><span>метка «сюда» / «опасность»</span>
             <span><kbd>R</kbd></span><span>аптечка: вернуть погибшего друга</span>
             <span><kbd>H</kbd></span><span>скрыть миникарту</span>
+            <span><kbd>1</kbd>–<kbd>4</kbd></span><span>реплики: «Сюда!», «Бегите!», «Помогите!», «Тихо…» (громкие слышат существа)</span>
+            <span><kbd>N</kbd></span><span>камера ночного видения (не привлекает существ, своя батарея)</span>
+            <span><kbd>P</kbd></span><span>фоторежим (Enter — сохранить снимок)</span>
             <span><kbd>J</kbd></span><span>дневник: записки, коды, подсказки</span>
             <span><kbd>F3</kbd></span><span>счётчик FPS и отладка</span>
             <span>🎮</span><span>геймпад: стики — ход и взгляд, A — прыжок, B — присесть, X — действие, Y — фонарь, RB — бег</span>
@@ -103,6 +115,14 @@
         <div class="card">
           <h4>ЭТАПЫ</h4>
           <div class="lvls" id="lvlList"></div>
+        </div>
+        <div class="card" style="margin-top:16px">
+          <h4>РЕКОРДЫ СЕРВЕРА</h4>
+          <div class="records" id="records">загрузка…</div>
+        </div>
+        <div class="card" style="margin-top:16px">
+          <h4>ДОСТИЖЕНИЯ</h4>
+          <div class="achs" id="achList"></div>
         </div>
         <div class="card" style="margin-top:16px">
           <h4>НАСТРОЙКИ</h4>

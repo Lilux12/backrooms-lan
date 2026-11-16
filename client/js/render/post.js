@@ -38,11 +38,11 @@ const compMat = new THREE.ShaderMaterial({
   uniforms: {
     tex: { value: null }, bloom: { value: null }, time: { value: 0 }, res: { value: new THREE.Vector2(1, 1) },
     bloomK: { value: 0 }, vign: { value: 0 }, ca: { value: 0 }, grain: { value: 0 }, vhs: { value: 0 },
-    tint: { value: new THREE.Vector3(1, 1, 1) }, sat: { value: 1 }, contrast: { value: 1 }, danger: { value: 0 },
+    tint: { value: new THREE.Vector3(1, 1, 1) }, sat: { value: 1 }, contrast: { value: 1 }, danger: { value: 0 }, nv: { value: 0 },
   },
   vertexShader: VERT,
   fragmentShader: `uniform sampler2D tex; uniform sampler2D bloom; uniform float time; uniform vec2 res;
-    uniform float bloomK, vign, ca, grain, vhs, sat, contrast, danger; uniform vec3 tint; varying vec2 vUv;
+    uniform float bloomK, vign, ca, grain, vhs, sat, contrast, danger, nv; uniform vec3 tint; varying vec2 vUv;
     float hash(vec2 p) { return fract(sin(dot(p, vec2(12.9898, 78.233))) * 43758.5453); }
     void main() {
       vec2 uv = vUv;
@@ -64,6 +64,12 @@ const compMat = new THREE.ShaderMaterial({
       c = mix(vec3(l), c, sat);
       c = (c - 0.5) * contrast + 0.5;
       c *= tint;
+      if (nv > 0.0) { // ночное видение: яркость усилена, всё зелёное, шум и «линза»
+        float lum = dot(c, vec3(0.299, 0.587, 0.114));
+        c = vec3(0.15, 1.0, 0.25) * pow(lum * 4.5, 0.75);
+        c += (hash(uv * res * 0.5 + time) - 0.5) * 0.18;
+        c *= 1.0 - smoothstep(0.15, 0.32, r2);
+      }
       if (vign > 0.0) c *= 1.0 - smoothstep(0.2, 0.85, r2 * 2.2) * vign;
       if (grain > 0.0) c += (hash(uv * res + fract(time * 13.7) * 100.0) - 0.5) * 0.09 * grain;
       if (vhs > 0.0) c *= 0.92 + 0.08 * sin(uv.y * res.y * 1.6 + time * 8.0);
@@ -95,8 +101,9 @@ export const postOn = () => !!settings.post;
 let lastW = 0, lastH = 0, time = 0;
 
 // Нарисовать кадр (с постобработкой или напрямую). danger 0..1 — близость существа
-export function renderFrame(dt, danger = 0, vhsForced = false) {
+export function renderFrame(dt, danger = 0, vhsForced = false, nv = false) {
   if (!settings.post) { renderer.setRenderTarget(null); renderer.render(scene, camera); return; }
+  compMat.uniforms.nv.value = nv ? 1 : 0;
   const size = renderer.getDrawingBufferSize(new THREE.Vector2());
   if (!rt || size.x !== lastW || size.y !== lastH) { lastW = size.x; lastH = size.y; makeTargets(); }
   time += dt;

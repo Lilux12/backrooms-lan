@@ -26,9 +26,12 @@ function resolve(url) {
   return null;
 }
 
-function createHttpServer() {
+// routes: { '/путь': () => объект } — динамические JSON-ответы (например, таблица рекордов)
+function createHttpServer(routes = {}) {
   return http.createServer((req, res) => {
     if (req.url === '/favicon.ico') { res.writeHead(204); res.end(); return; }
+    const route = routes[req.url.split('?')[0]];
+    if (route) { res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-cache' }); res.end(JSON.stringify(route())); return; }
     const file = resolve(req.url);
     const type = file && MIME[path.extname(file)];
     if (!type) { res.writeHead(404); res.end('Not found'); return; }

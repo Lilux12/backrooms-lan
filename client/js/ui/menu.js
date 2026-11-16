@@ -48,6 +48,12 @@ document.addEventListener('mousemove', (e) => {
 export function initMenu() {
   $('stuck').addEventListener('click', () => { sendNet({ t: 'stuck' }); $('play').click(); });
   renderLevelList();
+  // роль и цвет — для следующего подключения
+  $('role').value = localStorage.getItem('br_role') || '';
+  $('color').value = localStorage.getItem('br_color') || '#6aa0ff';
+  $('role').addEventListener('change', () => localStorage.setItem('br_role', $('role').value));
+  $('color').addEventListener('input', () => localStorage.setItem('br_color', $('color').value));
+  loadRecords();
   const host = location.host || '';
   $('addr').textContent = /^(localhost|127\.)/.test(location.hostname) ? `http://<IP хоста>:${location.port || 3000} (он написан в окне сервера)` : location.origin;
 
@@ -148,4 +154,21 @@ export function renderLevelList() {
     if (open && S.admin) d.addEventListener('click', () => { sendNet({ t: 'adm', cmd: 'level', args: { v: i } }); $('play').click(); });
     list.append(d);
   });
+}
+
+/* ---------------------------- Рекорды сервера ---------------------------- */
+const fmt = (t) => `${Math.floor(t / 60)}:${String(t % 60).padStart(2, '0')}`;
+export async function loadRecords() {
+  const box = $('records');
+  try {
+    const db = await (await fetch('/records.json')).json();
+    box.innerHTML = '';
+    const camp = db.campaign && db.campaign[0];
+    if (camp) box.insertAdjacentHTML('beforeend', `<div class="r"><b>Вся кампания</b><span>${fmt(camp.time)} · ${camp.names.join(', ')} · ${camp.ending === 'stay' ? 'остались' : 'вышли'}</span></div>`);
+    LEVELS.forEach((L, i) => {
+      const best = (db.levels[String(i)] || [])[0];
+      if (best) box.insertAdjacentHTML('beforeend', `<div class="r"><span>${L.name}</span><span>${fmt(best.time)} · ${best.names.join(', ')}</span></div>`);
+    });
+    if (!box.children.length) box.textContent = 'Рекордов пока нет — пройдите уровень первыми.';
+  } catch (e) { box.textContent = 'Рекорды недоступны (откройте игру через сервер).'; }
 }

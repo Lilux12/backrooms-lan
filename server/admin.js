@@ -169,6 +169,9 @@ const HANDLERS = {
   say: (G, c, a) => broadcast({ t: 'say', text: a.text, by: c.name }),
 
   level: (G, c, a, api) => api.startLevel(a.v),
+  difficulty: (G, c, a) => { state.difficulty = a.v; G.difficulty = a.v; }, // скорость и правила — сразу, аптечки — со следующего уровня
+  daily: (G, c, a) => { state.daily = !!a.on; },
+  modifiers: (G, c, a) => { state.modsOn = !!a.on; },
   seed: (G, c, a, api) => api.startLevel(G.idx, a.v),
   restart: (G, c, a, api) => api.startLevel(G.idx),
   skip: (G, c, a, api) => api.startLevel(G.idx === BR.LEVELS.length - 1 ? 0 : G.idx + 1),

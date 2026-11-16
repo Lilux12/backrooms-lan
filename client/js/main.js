@@ -19,6 +19,7 @@ import { placeMe, updateBattery, updateCamera, updateMovement } from './game/pla
 // Модуль ввода вешает обработчики клавиш при загрузке.
 import { pollGamepad } from './game/input.js';
 import { updateTips } from './ui/tips.js';
+import { NV, capturePhoto, renderAchievements, updateExtras } from './game/extras.js';
 import { fadeChat, tickExpose } from './game/social.js';
 import { tickMarks, updateSpectator } from './game/spectator.js';
 import { W } from './game/worldfx.js';
@@ -64,6 +65,7 @@ function update(dt) {
   tickMarks(dt);
   fadeChat();
   updateTips(dt);
+  updateExtras(dt);
 }
 
 // Динамическое разрешение и отладочный оверлей F3
@@ -97,11 +99,13 @@ function frame(now) {
   last = now;
   update(dt);
   renderer.info.autoReset = false; renderer.info.reset();
-  renderFrame(dt, S.prox || 0, W.filter === 'vhs');
+  renderFrame(dt, S.prox || 0, W.filter === 'vhs', NV.on);
+  if (S.wantShot) { S.wantShot = false; capturePhoto(); } // буфер кадра ещё не очищен
   trackPerf(Math.min(1, raw));
   perf.showT -= raw;
   if (perf.showT <= 0) { perf.showT = 0.5; drawPerf(); }
 }
 
 initMenu();
+renderAchievements();
 requestAnimationFrame(frame);
