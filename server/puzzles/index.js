@@ -15,7 +15,7 @@ const { log } = require('../clients');
 
 const PUZZLES = Object.assign({},
   require('./classic'), require('./parking'), require('./pools'), require('./tunnels'), require('./hospital'), require('./offices'),
-  require('./hotel'));
+  require('./hotel'), require('./mall'));
 
 const FINALE_MUL = 1.15;     // после открытия выхода существа быстрее
 const HINT_AFTER = 300;      // через столько секунд без прогресса — подсказка

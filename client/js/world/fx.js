@@ -286,5 +286,121 @@ export function buildFxMore(e, map, group, updaters) {
       break;
     }
     case 'hall': break; // великий зал: архитектура целиком в геометрии
+    case 'escalators': break; // эскалаторы рисует геометрия по стилю уровня
+    case 'chandelier': {
+      const y = y0 + FH - 0.25, gold = lam(0xc8a040, 0x302008), crystal = new THREE.MeshBasicMaterial({ color: 0xfff4d8 });
+      const g = new THREE.Group();
+      g.add(cylM(0.03, 0.03, 0.6, gold, 0, -0.3, 0, 5), cylM(0.9, 0.5, 0.12, gold, 0, -0.7, 0, 16));
+      for (let k = 0; k < 10; k++) { const a = k / 10 * Math.PI * 2; const c = cylM(0.03, 0.06, 0.28, crystal, Math.cos(a) * 0.75, -0.9, Math.sin(a) * 0.75, 6); g.add(c); }
+      const glow = glowSprite(0xffe2a0, 3.4, 0.55); glow.position.y = -0.8; g.add(glow);
+      g.position.set(e.x, y, e.z); group.add(g);
+      updaters.push((dt, t) => { g.rotation.y = Math.sin(t * 0.3 + e.x) * 0.05; glow.material.opacity = 0.5 + Math.sin(t * 13 + e.z) * 0.03; });
+      break;
+    }
+    case 'stairsign': {
+      for (let f = e.f0; f <= e.f1; f++) {
+        const s = signPlane(f === 0 ? 'ЛЕСТНИЦА · П' : `ЛЕСТНИЦА · ${f}`, 1.6, 0.36, '#2a5a2a', '#e0ffe0');
+        s.position.set(e.x, f * FH + FH - 0.6, e.z); group.add(s);
+      }
+      break;
+    }
+    case 'svcdoor': {
+      const s = signPlane('СЛУЖЕБНЫЙ ВХОД', 2.2, 0.36, '#4a1010', '#ffd0a0'); s.position.set(e.x, y0 + FH - 0.5, e.z - 2.0); group.add(s);
+      break;
+    }
+    case 'roofsign': {
+      const s = signPlane('ВЫХОД НА КРЫШУ →', 2.4, 0.4, '#0a4a2a', '#d0ffe0'); s.position.set(e.x - 4, y0 + FH - 0.5, e.z - 1.9); group.add(s);
+      break;
+    }
+    case 'dummy': {
+      // неподвижный манекен в витрине (настоящие манекены-существа выглядят так же — паранойя)
+      const white = lam(0xe8e2d8, 0x18160f), g = new THREE.Group();
+      g.add(cylM(0.2, 0.17, 0.75, white, 0, 1.25, 0, 12), cylM(0.17, 0.19, 0.25, white, 0, 0.85, 0, 12), cylM(0.07, 0.07, 0.8, white, -0.1, 0.4, 0, 8), cylM(0.07, 0.07, 0.8, white, 0.1, 0.4, 0, 8));
+      const head = new THREE.Mesh(new THREE.SphereGeometry(0.13, 14, 10), white); head.position.y = 1.82; head.scale.set(0.9, 1.15, 0.95); g.add(head);
+      g.position.set(e.x, y0, e.z); g.rotation.y = e.rot || 0; group.add(g);
+      break;
+    }
+    case 'shopsign': {
+      const names = ['МОДА', 'ОБУВЬ', 'ИГРУШКИ', 'КНИГИ', 'ЧАСЫ', 'ПАРФЮМ', 'ДЕТСКИЙ МИР', 'ЭЛЕКТРОНИКА', 'СПОРТ', 'ОПТИКА', 'ЦВЕТЫ', 'КОФЕ', 'АПТЕКА', 'ПОДАРКИ'];
+      const cols = ['#c02a5a', '#2a6ac0', '#c0a02a', '#2ac07a', '#8a2ac0'];
+      const sg = signPlane(names[e.n % names.length], 2.6, 0.5, '#111418', cols[e.n % cols.length]);
+      sg.position.set(e.x, y0 + FH - 0.6, e.z); sg.rotation.y = e.horiz ? 0 : Math.PI / 2; group.add(sg);
+      const lit = sg.material; updaters.push((dt, t) => { lit.opacity = 1; lit.color.setScalar(Math.random() < 0.01 ? 0.3 : 1); });
+      break;
+    }
+    case 'entrance': {
+      const s = signPlane('ТЦ «ГОРИЗОНТ» · ВХОД', 3.2, 0.5, '#1a2a4a', '#ffd040'); s.position.set(e.x, y0 + FH - 0.7, e.z + 1.9); group.add(s);
+      break;
+    }
+    case 'secroom': {
+      const s = signPlane('ОХРАНА', 1.6, 0.4, '#202020', '#ff6040'); s.position.set(e.x + 6 * T4 - 22, y0 + FH - 0.6, e.z + 6); s.rotation.y = Math.PI / 2; group.add(s);
+      break;
+    }
+    case 'roofgen': {
+      const smoke = glowSprite(0x606060, 3, 0.2); smoke.position.set(e.x + 0.8, y0 + 3.2, e.z + 0.3); group.add(smoke);
+      break;
+    }
+    case 'cinema': {
+      const scr = new THREE.Mesh(new THREE.PlaneGeometry(14, 4.2), new THREE.MeshBasicMaterial({ color: 0xc8d0d8, fog: false }));
+      scr.position.set(e.x, y0 + 2.4, e.z - 0.3); scr.rotation.y = Math.PI; group.add(scr);
+      const s = signPlane('АВАРИЙНЫЙ ВЫХОД', 2.0, 0.36, '#0a5a2a', '#d0ffe0'); s.position.set(31.5 * T4, y0 + 3.0, e.z - 0.4); s.rotation.y = Math.PI; group.add(s);
+      updaters.push((dt, t) => { const k = 0.35 + Math.abs(Math.sin(t * 0.7)) * 0.3 + (Math.random() < 0.05 ? 0.4 : 0); scr.material.color.setRGB(k * 0.8, k * 0.85, k); });
+      break;
+    }
   }
+}
+
+/* ------------- Таблички с номерами на дверях (отель): один атлас и одна геометрия ------------- */
+export function buildDoorPlates(map) {
+  const rooms = map.lv && map.lv.rooms;
+  if (!rooms || !rooms.length) return null;
+  const COLS = 16, CW = 64, CH = 32, rows = Math.ceil(rooms.length / COLS);
+  const c = document.createElement('canvas'); c.width = COLS * CW; c.height = Math.max(32, 2 ** Math.ceil(Math.log2(rows * CH)));
+  const g = c.getContext('2d');
+  rooms.forEach((r, k) => {
+    const x = (k % COLS) * CW, y = Math.floor(k / COLS) * CH;
+    g.fillStyle = '#b8902c'; g.fillRect(x + 2, y + 2, CW - 4, CH - 4);
+    g.strokeStyle = '#5a3a10'; g.lineWidth = 2; g.strokeRect(x + 4, y + 4, CW - 8, CH - 8);
+    g.fillStyle = '#1a1006'; g.font = 'bold 20px "Courier New"'; g.textAlign = 'center'; g.textBaseline = 'middle';
+    g.fillText(String(r.num), x + CW / 2, y + CH / 2 + 1);
+  });
+  const tex = new THREE.CanvasTexture(c); tex.colorSpace = THREE.SRGBColorSpace;
+  const pos = [], uv = [], idx = [];
+  const uvOf = (k) => { const u0 = (k % COLS) * CW / c.width, v0 = 1 - (Math.floor(k / COLS) + 1) * CH / c.height; return [u0, v0, u0 + CW / c.width, v0 + CH / c.height]; };
+  rooms.forEach((r, k) => {
+    // табличка на стене коридора рядом с проёмом: сбоку от двери, лицом в коридор
+    const sx = -r.nz, sz = r.nx, cx = BR.centerX(r.door), cz = BR.centerZ(r.door), y = r.f * map.FH + 1.65;
+    const px = cx + sx * 2.6 + r.nx * 2.02, pz = cz + sz * 2.6 + r.nz * 2.02, w = 0.22, h = 0.11;
+    const base = pos.length / 3;
+    for (const [a, b] of [[-1, -1], [1, -1], [1, 1], [-1, 1]]) pos.push(px + sx * a * w, y + b * h, pz + sz * a * w);
+    const [u0, v0, u1, v1] = uvOf(k);
+    uv.push(u0, v0, u1, v0, u1, v1, u0, v1);
+    idx.push(base, base + 1, base + 2, base, base + 2, base + 3);
+  });
+  const geo = new THREE.BufferGeometry();
+  geo.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+  geo.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2));
+  geo.setIndex(idx);
+  const mesh = new THREE.Mesh(geo, new THREE.MeshBasicMaterial({ map: tex, side: THREE.DoubleSide }));
+  mesh.frustumCulled = false;
+  // «неправильные» коридоры: номера на дверях, на которые никто не смотрит, иногда меняются местами
+  const uvAttr = geo.attributes.uv, shown = rooms.map((_, k) => k);
+  let t = 0;
+  function update(dt, cam, fwd, keyCells) {
+    t += dt;
+    if (t < 2.5) return;
+    t = 0;
+    const k = Math.floor(Math.random() * rooms.length), r = rooms[k];
+    if (keyCells.has(r.f + ':' + r.cells[4])) return; // номер с ключом не трогаем — по нему решают загадку
+    const cx = BR.centerX(r.door), cz = BR.centerZ(r.door);
+    const dx = cx - cam.x, dz = cz - cam.z, d = Math.hypot(dx, dz);
+    if (d < 30 && (dx * fwd.x + dz * fwd.z) / (d || 1) > -0.2) return; // на виду — не меняем
+    const same = rooms.map((q, j) => j).filter((j) => rooms[j].f === r.f && j !== k && !keyCells.has(rooms[j].f + ':' + rooms[j].cells[4]));
+    if (!same.length) return;
+    const j = same[Math.floor(Math.random() * same.length)];
+    [shown[k], shown[j]] = [shown[j], shown[k]];
+    for (const q of [k, j]) { const [u0, v0, u1, v1] = uvOf(shown[q]); uvAttr.array.set([u0, v0, u1, v0, u1, v1, u0, v1], q * 8); }
+    uvAttr.needsUpdate = true;
+  }
+  return { mesh, update, dispose() { geo.dispose(); tex.dispose(); mesh.material.dispose(); } };
 }

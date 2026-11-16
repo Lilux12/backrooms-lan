@@ -64,9 +64,20 @@ const SOLVERS = {
 
   // Код: обойти цифры (с фонарём — краска видна только в его свете), открыть доступ к терминалу, ввести код
   async code(api, cfg) {
-    const digits = api.of('digit').sort((a, b) => a.idx - b.idx);
+    let digits = api.of('digit').sort((a, b) => a.idx - b.idx);
     for (const d of digits) await api.goTo(...front(d), { fl: true });
-    if (cfg.keypadPoi) {
+    if (cfg.codeTapes) {
+      // код на кассетах: посмотреть обе и собрать цифры из «7 3 _ _» и «_ _ 1 9»
+      const code = ['_', '_', '_', '_'];
+      for (const t of api.of('paper').filter((q) => q.tape != null)) {
+        await api.goTo(t.x, t.y, t.z);
+        const note = await api.use(t, (m) => m.t === 'note');
+        const line = note.text.split('\n').find((l) => /^[\d_ ]+$/.test(l.trim()) && l.trim().length >= 7);
+        line.trim().split(' ').forEach((ch, k) => { if (ch !== '_') code[k] = ch; });
+      }
+      digits = code.map((d, k) => ({ digit: +d, idx: k }));
+    }
+    if (cfg.keypadPoi && api.switches('reception').length) {
       const rc = api.switches('reception')[0];
       await api.goTo(rc.x, rc.y, rc.z);
       await api.waitFor((m) => m.t === 'cell' && m.type === 0, 4000); // дверь переговорной открылась
@@ -139,6 +150,30 @@ const SOLVERS = {
     await api.goTo(a.x, a.y, a.z);
     await api.goTo(b.x, b.y, b.z);
     await api.waitFor((m) => m.t === 'cell' && m.type === 0, 4000);
+  },
+
+  // Отель: ключи по номерам → ключница → две кнопки лифта одновременно
+  async hotel(api) {
+    for (const k of api.of('key')) { await api.goTo(k.x, k.y, k.z); }
+    await api.waitFor((m) => m.t === 'goal' && m.lines.some((l) => /Ключи: 4\/4|в руках: 4/.test(l)), 4000).catch(() => {});
+    const ks = api.of('keyslot')[0];
+    await api.goTo(ks.x + 0.8, ks.y, ks.z);
+    await api.use(ks, (m) => m.t === 'ev' && /повесил ключи/.test(m.text));
+    const [a, b] = api.switches('liftbtn');
+    await api.goTo(a.x, a.y, a.z);
+    await api.goTo(b.x, b.y, b.z);
+    await api.waitFor((m) => m.t === 'ev' && /Служебный лифт приехал/.test(m.text), 5000);
+  },
+
+  // ТЦ: канистра и предохранитель → насос + генератор (дальше код на кассетах — решатель кода)
+  async mall(api) {
+    for (const k of ['fuelcan', 'mallfuse']) { const o = api.of(k)[0]; await api.goTo(o.x, o.y, o.z); await api.waitFor((m) => m.t === 'pick' && m.kind === k, 3000); }
+    const gen = api.of('genroof')[0], pump = api.switches('fuelpump')[0];
+    await api.goTo(gen.x + 1.5, gen.y, gen.z);
+    await api.use(gen, (m) => m.t === 'ev' && /топливо не идёт/.test(m.text)); // без насоса не заводится
+    await api.goTo(pump.x, pump.y, pump.z);
+    await api.goTo(gen.x + 1.5, gen.y, gen.z);
+    await api.use(gen, (m) => m.t === 'ev' && /завёл генератор/.test(m.text));
   },
 
   // Механика уровня без отдельной цели

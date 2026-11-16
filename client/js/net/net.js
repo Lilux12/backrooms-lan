@@ -63,7 +63,7 @@ function onNet(m) {
       // изменения уровня, случившиеся до нашего подключения: открытые шлюзы, проломы, упавшие каталки
       if (m.cells && m.cells.length) for (const c of m.cells) setCellLocal(c.f, c.i, c.type, c.aux);
       for (const o of m.obst || []) addObstacleNet(o);
-      S.cctvUntil = 0; S.blackoutUntil = 0; S.finale = false;
+      S.cctvUntil = 0; S.blackoutUntil = 0; S.finale = false; S.powered = !!m.powered;
       hideBanner(); renderGoals();
       showLevelTitle(m.level);
       S.joined = true;
@@ -176,6 +176,12 @@ function onEvent(m) {
       break;
     }
     case 'finale': S.finale = true; sfx.roar(); toast('Они почуяли, что вы уходите! БЕГИТЕ К ВЫХОДУ!', 4000); break;
+    case 'power': S.powered = true; sfx.zap(); break;
+    case 'glitch': {
+      me.shake = Math.max(me.shake || 0, 0.5); sfx.glitch(); sfx.whisper();
+      const fl = $('flash'); fl.classList.add('on'); setTimeout(() => fl.classList.remove('on'), 120);
+      break;
+    }
     case 'caralarms': for (let k = 0; k < 3; k++) setTimeout(() => sfx.caralarm(0.7), k * 400); toast('Генератор взревел — по всей парковке воют сигнализации!', 3500); break;
   }
 }

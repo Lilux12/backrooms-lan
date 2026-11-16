@@ -245,6 +245,7 @@ function observed(G, m, def, players) {
     let ok;
     if (def.statue === 'look') ok = true;
     else if (def.statue === 'light') ok = (p.fl && d < 26 && c > BEAM_COS) || d < 6;
+    else if (def.statue === 'beam') ok = p.fl && d < 26 && c > BEAM_COS; // в полной темноте — только луч
     else ok = (p.fl && d < 22 && c > BEAM_COS) || d < 9; // кукла: видно только вблизи или в луче
     if (ok && BR.los3(G.map, p.x, p.y + 1.6, p.z, m.x, m.y + 1.3, m.z)) return true;
   }
@@ -252,7 +253,8 @@ function observed(G, m, def, players) {
 }
 
 function updateStatue(G, m, def, dt, players) {
-  m.frozen = observed(G, m, def, players);
+  // в темноте (свет погас) манекены видно только в луче фонаря
+  m.frozen = observed(G, m, G.statueBoost > 0 && def.statue === 'light' ? Object.assign({}, def, { statue: 'beam' }) : def, players);
   if (m.frozen) { m.mode = 'frozen'; return; }
   const speed = chaseSpeed(G, m, def);
   // цель: кто бежит (Коридорный слышит бег) или кто ближе hunt метров
@@ -261,7 +263,8 @@ function updateStatue(G, m, def, dt, players) {
     if (p.node < 0) continue;
     const d = dist3(p, m);
     const heard = def.runHear && (p.spd || 0) > RUN_SPD && d < def.runHear;
-    if ((heard || (def.hunt && d < def.hunt) || d < 10) && d < bd) { bd = d; target = p; }
+    const hunt = def.hunt ? def.hunt * (G.statueBoost > 0 ? 2.2 : 1) * (G.doorOpen ? 2 : 1) : 0;
+    if ((heard || (hunt && d < hunt) || d < 10) && d < bd) { bd = d; target = p; }
   }
   if (target) { m.mode = 'chase'; m.lastNode = target.node; mobMove(G, m, dt, target.node, speed, target); return; }
   if (m.alert) {

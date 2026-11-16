@@ -175,4 +175,66 @@ export const STYLES = {
       }, FULL / 4, FULL / 4),
     }),
   },
+  hotel: {
+    fog: 0x2c1c12, fogD: 0.03, hemi: [0xffe6c0, 0x40281a, 1.6], sun: [0xffe0b0, 0.8], lamp: [0xffd6a0, 4.6],
+    panel: { c: [1, 0.86, 0.62], size: 0.9, test: (x, y, h) => (x + y) % 2 === 0 && h > 0.3 },
+    flick: [6, 18], hum: [55, 110, 165, 220], amb: 'creak', fr: 8, cr: 4,
+    tex: () => ({
+      wall: makeTex(256, (g, s) => {
+        // обои с дамасским узором и деревянная панель внизу
+        g.fillStyle = '#b89a6a'; g.fillRect(0, 0, s, s);
+        g.fillStyle = 'rgba(120,80,30,.35)';
+        for (let y = 0; y < s * 0.62; y += 48) for (let x = (y / 48) % 2 ? 24 : 0; x < s; x += 48) {
+          g.beginPath(); g.ellipse(x + 12, y + 18, 8, 14, 0, 0, 7); g.fill();
+          g.beginPath(); g.moveTo(x + 12, y + 2); g.lineTo(x + 20, y + 18); g.lineTo(x + 12, y + 34); g.lineTo(x + 4, y + 18); g.closePath(); g.fill();
+        }
+        g.fillStyle = '#4a2a16'; g.fillRect(0, s * 0.62, s, s * 0.38);
+        g.fillStyle = 'rgba(255,220,150,.25)'; g.fillRect(0, s * 0.62, s, 4);
+        for (let x = 0; x < s; x += 64) { g.fillStyle = 'rgba(0,0,0,.25)'; g.fillRect(x, s * 0.62, 3, s * 0.38); }
+        stains(g, s, 4, 'rgba(60,40,20,.25)'); grain(g, s, 16);
+      }),
+      floor: makeTex(256, (g, s) => {
+        // красный ковёр с золотым орнаментом
+        g.fillStyle = '#6a1418'; g.fillRect(0, 0, s, s);
+        g.strokeStyle = 'rgba(200,150,60,.55)'; g.lineWidth = 3;
+        for (let k = 0; k < 4; k++) { const o = k * 64 + 32; g.beginPath(); g.moveTo(o, 8); g.lineTo(o + 24, 32); g.lineTo(o, 56); g.lineTo(o - 24, 32); g.closePath(); g.stroke(); }
+        for (let k = 0; k < 4; k++) { const o = k * 64 + 32; g.beginPath(); g.arc(o, 160, 22, 0, 7); g.stroke(); }
+        g.fillStyle = 'rgba(200,150,60,.4)'; g.fillRect(0, 100, s, 4); g.fillRect(0, 220, s, 4);
+        stains(g, s, 5, 'rgba(20,0,0,.35)', 40); grain(g, s, 22);
+      }, FULL / 4, FULL / 4),
+      ceil: makeTex(256, (g, s) => {
+        g.fillStyle = '#e8dcc4'; g.fillRect(0, 0, s, s);
+        g.strokeStyle = 'rgba(150,120,80,.7)'; g.lineWidth = 6; g.strokeRect(16, 16, s - 32, s - 32);
+        g.lineWidth = 2; g.strokeRect(30, 30, s - 60, s - 60);
+        stains(g, s, 3, 'rgba(120,90,40,.2)'); grain(g, s, 12);
+      }, FULL / 4, FULL / 4),
+    }),
+  },
+  mall: {
+    fog: 0x1c2228, fogD: 0.03, hemi: [0xe0eaf4, 0x30363c, 1.4], sun: [0xf0f4ff, 0.9], lamp: [0xe8f0ff, 4.4], unpowered: true, escalator: true,
+    panel: { c: [0.92, 0.96, 1], size: 2.2, test: (x, y, h) => x % 2 === 0 && y % 3 === 0 && h > 0.1 },
+    flick: [3, 9], hum: [50, 100, 150, 200], amb: 'muzak', fr: 8, cr: 8,
+    tex: () => ({
+      wall: makeTex(256, (g, s) => {
+        // витринная стена: светлая штукатурка, полоса плитки, вывесочный короб сверху
+        g.fillStyle = '#d8d8d2'; g.fillRect(0, 0, s, s);
+        g.fillStyle = '#2a2e34'; g.fillRect(0, 0, s, 40);
+        g.fillStyle = 'rgba(255,255,255,.1)'; for (let x = 0; x < s; x += 32) g.fillRect(x, 4, 28, 30);
+        g.fillStyle = '#a8b0b6'; g.fillRect(0, s - 50, s, 50);
+        gridLines(g, s, 64, 'rgba(90,96,100,.35)', 2);
+        stains(g, s, 6, 'rgba(60,70,60,.22)'); grain(g, s, 14);
+      }),
+      floor: makeTex(256, (g, s) => {
+        // глянцевая плитка торгового центра
+        for (let y = 0; y < 4; y++) for (let x = 0; x < 4; x++) { g.fillStyle = (x + y) % 2 ? '#e4e2dc' : '#cfcdc6'; g.fillRect(x * 64, y * 64, 64, 64); }
+        g.fillStyle = 'rgba(255,255,255,.18)'; for (let i = 0; i < 12; i++) g.fillRect(Math.random() * s, Math.random() * s, 40, 3);
+        gridLines(g, s, 64, 'rgba(90,90,85,.6)', 2);
+        stains(g, s, 6, 'rgba(70,80,60,.25)', 50); grain(g, s, 14);
+      }, FULL / 6, FULL / 6),
+      ceil: makeTex(256, (g, s) => {
+        g.fillStyle = '#e6e8ea'; g.fillRect(0, 0, s, s);
+        gridLines(g, s, 64, 'rgba(120,124,128,.8)', 3); stains(g, s, 4, 'rgba(110,100,60,.2)'); grain(g, s, 10);
+      }, FULL / 4, FULL / 4),
+    }),
+  },
 };

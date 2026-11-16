@@ -90,6 +90,9 @@ export const sfx = {
   lift: (v = 1) => { tone(880, 0.5, 0.15 * v, 'sine'); tone(660, 0.7, 0.12 * v, 'sine', null, 0.25); noiseBurst(200, 0.8, 0.15 * v); },
   crash: (v = 1) => { noiseBurst(1800, 0.5, 0.45 * v, 'bandpass'); tone(160, 0.4, 0.3 * v, 'sawtooth', 60); },
   steam: (v = 1) => noiseBurst(5000, 2.5, 0.25 * v, 'highpass'),
+  creak: () => { const f = rand(90, 160); tone(f, 1.2, 0.05, 'sawtooth', f * 1.3); if (Math.random() < 0.3) tone(1320, 1.4, 0.03, 'sine', null, 0.6); }, // скрип пола и далёкий звонок лифта
+  muzak: () => { const base = [262, 330, 392, 349][Math.floor(Math.random() * 4)]; [0, 0.4, 0.8].forEach((d, i) => tone(base * [1, 1.25, 0.94][i], 0.5, 0.025, 'triangle', base * 0.97, d)); }, // обрывки музыки из колонок
+  glitch: () => { noiseBurst(4000, 0.4, 0.3, 'bandpass'); tone(60, 0.6, 0.3, 'square', 30); },
 };
 
 // Звуки близости существа (гул страха, сердцебиение) и случайные звуки окружения
@@ -105,7 +108,7 @@ export function updateAudio(dt, prox, underwater = false) {
     if (heartT <= 0) { sfx.thump(0.3 + prox); heartT = 1.05 - prox * 0.65; setTimeout(() => sfx.thump(0.2 + prox * 0.6), 160); }
   }
   if (A.amb) {
-    const rate = { drip: 0.45, clang: 0.1, rumble: 0.08, crackle: 0.3 }[A.amb];
+    const rate = { drip: 0.45, clang: 0.1, rumble: 0.08, crackle: 0.3, creak: 0.07, muzak: 0.05 }[A.amb] || 0.1;
     ambT += dt;
     if (ambT > 0.25) { if (Math.random() < rate * ambT) sfx[A.amb](); ambT = 0; }
   }

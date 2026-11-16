@@ -51,6 +51,11 @@ function parts() {
     6: [ // штабель ящиков
       [merge([box(1.4, 1.0, 1.4, -0.9, 0.5, 0.6), box(1.2, 0.9, 1.2, 0.8, 0.45, -0.7), box(1.0, 0.7, 1.0, -0.6, 1.35, 0.5)]), lam(0x8a6a40), false],
     ],
+    8: [ // ряд кресел кинотеатра
+      [merge([-1.5, -0.5, 0.5, 1.5].map((x) => box(0.85, 0.45, 0.8, x, 0.45, 0.1))), lam(0x8a1420, 0x140204), false],
+      [merge([-1.5, -0.5, 0.5, 1.5].map((x) => box(0.85, 0.85, 0.15, x, 0.85, -0.35))), lam(0x7a1018, 0x120204), false],
+      [merge([-2, -1, 0, 1, 2].map((x) => box(0.12, 0.7, 0.8, x, 0.35, 0.05))), lam(0x1a1a1a), false],
+    ],
     7: [ // низкий стеллаж с книгами/игрушками
       [box(3.8, 1.3, 0.8, 0, 0.65, 0), lam(0x6b4a2c), false],
       [merge([0.35, 0.8].map((y) => box(3.6, 0.36, 0.05, 0, y, 0.41))), lam(0x8c3a2a), true],
@@ -106,4 +111,21 @@ export function rampGeo(FH) {
   g.rotateX(-Math.atan2(rise, TILE));
   g.translate(0, rise / 2 - 0.09, 0);
   return g;
+}
+
+// Эскалатор: металлические ступени, по бокам — стеклянные балюстрады с поручнями (подъём FH/2 вдоль +z)
+export function escalatorParts(FH) {
+  const n = 10, rise = FH / 2 / n, run = TILE / n, steps = [], sides = [], rails = [];
+  for (let k = 0; k < n; k++) { const h = rise * (k + 1); steps.push(box(TILE - 1.2, h, run, 0, h / 2, -TILE / 2 + run * (k + 0.5))); }
+  const len = Math.hypot(TILE, FH / 2), ang = Math.atan2(FH / 2, TILE);
+  for (const sx of [-(TILE / 2 - 0.45), TILE / 2 - 0.45]) {
+    const side = new THREE.BoxGeometry(0.08, 1.0, len); side.rotateX(-ang); side.translate(sx, FH / 4 + 0.5, 0); sides.push(side);
+    const rail = new THREE.BoxGeometry(0.14, 0.08, len); rail.rotateX(-ang); rail.translate(sx, FH / 4 + 1.04, 0); rails.push(rail);
+    const skirt = new THREE.BoxGeometry(0.5, 0.5, len); skirt.rotateX(-ang); skirt.translate(sx > 0 ? sx + 0.2 : sx - 0.2, FH / 4 - 0.1, 0); steps.push(skirt);
+  }
+  return [
+    [merge(steps), lam(0x8a9096)],
+    [merge(sides), new THREE.MeshLambertMaterial({ color: 0x9fd8e8, transparent: true, opacity: 0.35, depthWrite: false })],
+    [merge(rails), lam(0x111111)],
+  ];
 }
