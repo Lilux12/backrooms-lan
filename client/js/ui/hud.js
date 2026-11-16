@@ -61,7 +61,15 @@ export function showLevelTitle(level) {
 // Обновление HUD каждый кадр: подсказка действия, красная виньетка, полоски, миникарта, часы
 const t0 = performance.now();
 let hudTimer = 0;
+let drumT = 0;
 export function updateHud(dt, prox) {
+  const now = performance.now() / 1000;
+  if (S.countdownEnd) {
+    const left = Math.max(0, S.countdownEnd - now);
+    $('countdown').textContent = `СБРОС РЕАКТОРА · ${Math.floor(left / 60)}:${String(Math.floor(left % 60)).padStart(2, '0')}`;
+    if (left <= 0) { S.countdownEnd = 0; $('countdown').classList.remove('on'); }
+  }
+  if (S.drumUntil > now) { drumT -= dt; if (drumT <= 0) { drumT = 0.75; sfx.drum(0.8); } }
   const pr = $('prompt');
   const u = S.joined && map && !keypad.open ? nearestUsable() : null;
   if (u) { pr.innerHTML = promptFor(u); pr.classList.add('on'); } else pr.classList.remove('on');

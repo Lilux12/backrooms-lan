@@ -221,7 +221,7 @@
       const a = step(w, d ^ 1), b1 = step(w, d), b2 = step(w, d, 2);
       if (a < 0 || b1 < 0 || !isFlat(L[a])) continue;
       if (L[b1] === T.FLOOR) { L[w] = T.VENT; n++; continue; }
-      if (b2 >= 0 && L[b1] === T.WALL && L[b2] === T.FLOOR) { L[w] = T.VENT; L[b1] = T.VENT; n++; }
+      if (b2 >= 0 && L[b1] === T.WALL && L[b2] === T.FLOOR && !reserved(map, b1)) { L[w] = T.VENT; L[b1] = T.VENT; n++; } // сквозь «знаковую» стену лаз не ведём
     }
     return n;
   }

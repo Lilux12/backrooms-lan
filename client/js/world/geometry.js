@@ -181,6 +181,7 @@ export function buildLevelGeometry(map, mats, st, seed, panelMat) {
       if (t !== T.VENT && t !== T.LOW && up !== T.HOLE) {
         const cy = f + 1 < F ? b + FH - SLAB : b + FH;
         if (f + 1 >= F && map.glass[i]) { glass.push(mtx(x, cy, z)); continue; } // стеклянная крыша
+        if (f + 1 >= F && map.sky) continue; // фабрика: над верхним ярусом — чёрное небо
         ceils.push(mtx(x, cy, z));
         const h = Math.sin(cx * 12.9898 + cz * 78.233 + seed + f * 7.1) * 43758.5453;
         if (t !== T.STAIR && st.panel.test(cx, cz, h - Math.floor(h))) panels.push(mtx(x, cy - 0.02, z));

@@ -237,4 +237,95 @@ export const STYLES = {
       }, FULL / 4, FULL / 4),
     }),
   },
+  lab: {
+    fog: 0x0e1a1e, fogD: 0.034, hemi: [0xd8f4ff, 0x1e3038, 1.45], sun: [0xe8faff, 0.8], lamp: [0xd0f0ff, 4.6],
+    panel: { c: [0.85, 0.97, 1], size: 1.6, test: (x, y, h) => (x + y) % 2 === 0 && h > 0.25 },
+    flick: [4, 12], hum: [60, 120, 240, 480], amb: 'beep', fr: 4, cr: 4,
+    tex: () => ({
+      wall: makeTex(256, (g, s) => {
+        g.fillStyle = '#d4dee0'; g.fillRect(0, 0, s, s);
+        gridLines(g, s, 64, 'rgba(120,140,145,.55)', 2);
+        g.fillStyle = '#2a7a8a'; g.fillRect(0, s * 0.7, s, 10);                 // цветная полоса сектора
+        g.fillStyle = 'rgba(0,0,0,.25)'; g.fillRect(0, s - 30, s, 30);
+        g.fillStyle = 'rgba(40,10,10,.35)'; g.font = 'bold 22px "Courier New"'; g.fillText('BIO-7', 16, 40);
+        stains(g, s, 5, 'rgba(60,80,70,.25)'); grain(g, s, 12);
+      }),
+      floor: makeTex(256, (g, s) => {
+        g.fillStyle = '#9aa6a8'; g.fillRect(0, 0, s, s);
+        gridLines(g, s, 32, 'rgba(60,70,72,.45)', 1.5);
+        g.fillStyle = 'rgba(220,180,40,.6)'; for (let x = 0; x < s; x += 32) { g.save(); g.translate(x, s - 14); g.rotate(-0.6); g.fillRect(0, 0, 14, 30); g.restore(); }
+        stains(g, s, 6, 'rgba(30,50,40,.3)', 40); grain(g, s, 18);
+      }, 4, 4),
+      ceil: makeTex(256, (g, s) => {
+        g.fillStyle = '#c4ced0'; g.fillRect(0, 0, s, s);
+        gridLines(g, s, 64, 'rgba(90,100,104,.8)', 3);
+        g.fillStyle = 'rgba(40,40,40,.4)'; for (let i = 0; i < 4; i++) g.fillRect(20 + i * 64, 20, 24, 24); // решётки вентиляции
+        grain(g, s, 10);
+      }, 4, 4),
+    }),
+  },
+  school: {
+    fog: 0x3a3020, fogD: 0.026, hemi: [0xfff0d8, 0x4a3a28, 1.5], sun: [0xfff4e0, 0.9], lamp: [0xfff0d0, 4.4],
+    panel: { c: [1, 0.95, 0.85], size: 2.0, test: (x, y, h) => x % 2 === 0 && y % 2 === 0 && h > 0.2 },
+    flick: [8, 22], hum: [55, 110, 165, 330], amb: 'giggle', fr: 4, cr: 8,
+    tex: () => ({
+      wall: makeTex(256, (g, s) => {
+        // пастельные обои с облачками и звёздочками, зелёная масляная панель снизу
+        g.fillStyle = '#e8d8b8'; g.fillRect(0, 0, s, s);
+        for (let i = 0; i < 14; i++) {
+          const x = (i * 53) % s, y = 20 + ((i * 37) % 120);
+          g.fillStyle = ['rgba(255,170,170,.5)', 'rgba(170,200,255,.5)', 'rgba(255,230,140,.6)'][i % 3];
+          g.beginPath(); for (let k = 0; k < 5; k++) { const a = k * 1.2566 - 1.57; g.lineTo(x + Math.cos(a) * 10, y + Math.sin(a) * 10); g.lineTo(x + Math.cos(a + 0.628) * 4, y + Math.sin(a + 0.628) * 4); } g.fill();
+        }
+        g.fillStyle = '#5a8a5a'; g.fillRect(0, s * 0.62, s, s * 0.38);
+        g.fillStyle = 'rgba(255,255,255,.25)'; g.fillRect(0, s * 0.62, s, 5);
+        stains(g, s, 5, 'rgba(80,60,30,.22)'); grain(g, s, 14);
+      }),
+      floor: makeTex(256, (g, s) => {
+        // паркет ёлочкой (с переносом через край — текстура повторяется без шва)
+        g.fillStyle = '#8a5a30'; g.fillRect(0, 0, s, s);
+        for (let y = 0; y < s; y += 32) for (let x = 0; x < s + 64; x += 64) {
+          const o = (y / 32) % 2 ? 32 : 0;
+          g.fillStyle = ['#8a5a30', '#9a6a3a', '#7a4a28'][Math.floor((x + y) / 32) % 3]; g.fillRect(x + o - 64, y, 62, 30);
+        }
+        gridLines(g, s, 32, 'rgba(40,20,10,.35)', 1);
+        stains(g, s, 4, 'rgba(30,20,10,.3)', 40); grain(g, s, 16);
+      }, 4, 4),
+      ceil: makeTex(256, (g, s) => {
+        g.fillStyle = '#ece4d4'; g.fillRect(0, 0, s, s);
+        g.strokeStyle = 'rgba(150,130,100,.6)'; g.lineWidth = 4; g.strokeRect(10, 10, s - 20, s - 20);
+        stains(g, s, 4, 'rgba(140,110,60,.2)'); grain(g, s, 10);
+      }, 8, 8),
+    }),
+  },
+  factory: {
+    fog: 0x160c06, fogD: 0.028, hemi: [0xffb080, 0x2a140a, 1.3], sun: [0xffa060, 0.7], lamp: [0xffb070, 4.8],
+    panel: { c: [1, 0.6, 0.3], size: 0.9, test: (x, y, h) => (x * 3 + y) % 4 === 0 && h > 0.2 },
+    flick: [3, 10], pulse: true, hum: [35, 70, 105, 140], amb: 'clang', fr: 4, cr: 4,
+    tex: () => ({
+      wall: makeTex(256, (g, s) => {
+        // клёпаные стальные листы с ржавчиной
+        g.fillStyle = '#4a3a30'; g.fillRect(0, 0, s, s);
+        for (let y = 0; y < s; y += 64) for (let x = 0; x < s; x += 128) {
+          g.fillStyle = `rgba(${90 + (x + y) % 30},${60 + (x * y) % 20},40,.5)`; g.fillRect(x + 2, y + 2, 124, 60);
+          g.fillStyle = '#20160e'; for (let k = 8; k < 128; k += 20) { g.beginPath(); g.arc(x + k, y + 6, 2.5, 0, 7); g.arc(x + k, y + 58, 2.5, 0, 7); g.fill(); }
+        }
+        stains(g, s, 10, 'rgba(160,70,20,.35)'); stains(g, s, 4, 'rgba(0,0,0,.4)');
+        g.fillStyle = 'rgba(220,160,30,.6)'; for (let x = 0; x < s; x += 40) { g.save(); g.translate(x, s - 20); g.rotate(-0.7); g.fillRect(0, 0, 16, 34); g.restore(); }
+        grain(g, s, 26);
+      }),
+      floor: makeTex(256, (g, s) => {
+        // рифлёный металл
+        g.fillStyle = '#3a3634'; g.fillRect(0, 0, s, s);
+        g.fillStyle = 'rgba(160,150,140,.35)';
+        for (let y = 8; y < s; y += 22) for (let x = (y / 22) % 2 ? 0 : 11; x < s; x += 22) { g.save(); g.translate(x, y); g.rotate(0.7); g.fillRect(-7, -2, 14, 4); g.restore(); }
+        stains(g, s, 8, 'rgba(120,50,10,.35)', 50); grain(g, s, 24);
+      }, 4, 4),
+      ceil: makeTex(256, (g, s) => {
+        g.fillStyle = '#1e1a18'; g.fillRect(0, 0, s, s);
+        g.fillStyle = '#3a302a'; for (let x = 0; x < s; x += 64) g.fillRect(x, 0, 14, s);
+        grain(g, s, 14);
+      }, 4, 4),
+    }),
+  },
 };

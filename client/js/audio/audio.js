@@ -92,6 +92,12 @@ export const sfx = {
   steam: (v = 1) => noiseBurst(5000, 2.5, 0.25 * v, 'highpass'),
   creak: () => { const f = rand(90, 160); tone(f, 1.2, 0.05, 'sawtooth', f * 1.3); if (Math.random() < 0.3) tone(1320, 1.4, 0.03, 'sine', null, 0.6); }, // скрип пола и далёкий звонок лифта
   muzak: () => { const base = [262, 330, 392, 349][Math.floor(Math.random() * 4)]; [0, 0.4, 0.8].forEach((d, i) => tone(base * [1, 1.25, 0.94][i], 0.5, 0.025, 'triangle', base * 0.97, d)); }, // обрывки музыки из колонок
+  beep: () => { tone(rand(1800, 2400), 0.07, 0.04, 'square'); if (Math.random() < 0.4) tone(rand(900, 1200), 0.07, 0.03, 'square', null, 0.25); }, // приборы лаборатории
+  giggle: () => { const f = rand(500, 700); for (let i = 0; i < 4; i++) tone(f * (1 + i * 0.04), 0.09, 0.025, 'sine', f * 1.3, i * 0.11); }, // далёкий детский смех
+  musicbox: (v = 1) => { const mel = [784, 659, 698, 587, 659, 523, 587, 494, 523, 659, 784, 659]; mel.forEach((f, i) => tone(f, 0.5, 0.09 * v, 'sine', null, i * 0.42)); },
+  drum: (v = 1) => { tone(70, 0.35, 0.5 * v, 'sine', 45); noiseBurst(300, 0.15, 0.3 * v); },
+  cough: () => { noiseBurst(900, 0.25, 0.3, 'bandpass'); noiseBurst(700, 0.2, 0.25, 'bandpass'); },
+  tick: () => tone(1400, 0.05, 0.12, 'square'),
   glitch: () => { noiseBurst(4000, 0.4, 0.3, 'bandpass'); tone(60, 0.6, 0.3, 'square', 30); },
 };
 
@@ -108,7 +114,7 @@ export function updateAudio(dt, prox, underwater = false) {
     if (heartT <= 0) { sfx.thump(0.3 + prox); heartT = 1.05 - prox * 0.65; setTimeout(() => sfx.thump(0.2 + prox * 0.6), 160); }
   }
   if (A.amb) {
-    const rate = { drip: 0.45, clang: 0.1, rumble: 0.08, crackle: 0.3, creak: 0.07, muzak: 0.05 }[A.amb] || 0.1;
+    const rate = { drip: 0.45, clang: 0.1, rumble: 0.08, crackle: 0.3, creak: 0.07, muzak: 0.05, beep: 0.06, giggle: 0.03 }[A.amb] || 0.1;
     ambT += dt;
     if (ambT > 0.25) { if (Math.random() < rate * ambT) sfx[A.amb](); ambT = 0; }
   }

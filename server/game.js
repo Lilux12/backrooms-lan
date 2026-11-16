@@ -59,7 +59,7 @@ function startLevel(idx, forcedSeed) {
 
 // Новый уровень: клетки, предметы, кодовое слово — заново
 function resetPlayer(c) {
-  c.codeTries = 0; c.caged = 0; c.pingT = 0; c.askBy = 0; c.dead = false;
+  c.codeTries = 0; c.caged = 0; c.pingT = 0; c.askBy = 0; c.dead = false; c.toy = null;
   c.items = { detector: 0, noise: 0, medkit: 0 };
   const used = new Set(joinedList().filter((p) => p !== c).map((p) => p.word));
   const free = WORDS.filter((w) => !used.has(w));
@@ -79,12 +79,18 @@ function initMsg(c) {
   };
 }
 
-function finishLevel(G) {
+// ending — концовка финала: 'escape' (вышли к небу, фабрика разрушена) или 'stay' (кто-то остался Надсмотрщиком)
+function finishLevel(G, ending, by) {
+  if (G.state !== 'play') return;
   G.state = 'done';
   const last = G.idx === LEVELS.length - 1;
-  G.timer = last ? 14 : 6;
-  broadcast({ t: 'done', last, next: last ? '' : LEVELS[G.idx + 1].name });
-  log(last ? 'ИГРА ПРОЙДЕНА' : `уровень ${G.idx} пройден`);
+  G.timer = last ? 20 : 6;
+  const st = G.stats;
+  broadcast({
+    t: 'done', last, next: last ? '' : LEVELS[G.idx + 1].name, ending: last ? (ending || 'escape') : null, by: by || '',
+    stats: { time: Math.round((Date.now() - st.start) / 1000), deaths: st.deaths, notes: st.notes.size, exposed: st.exposed },
+  });
+  log(last ? `ИГРА ПРОЙДЕНА (концовка: ${ending || 'escape'})` : `уровень ${G.idx} пройден`);
 }
 
 // Подбор предметов при касании
@@ -121,7 +127,8 @@ function teleport(G, p, pos, reason) {
 
 PZ.hooks.teleport = (G, p, pos, reason) => teleport(G, p, pos, reason);
 PZ.hooks.kill = (G, p, reason, pub) => killPlayer(G, p, reason, pub);
-PZ.hooks.finish = (G, ending) => finishLevel(G, ending);
+PZ.hooks.finish = (G, ending, by) => finishLevel(G, ending, by);
+PZ.hooks.addObj = (G, kind, props) => addObjNet(G, kind, props);
 
 // Существо поймало игрока: телепорт (или рестарт забега на уровне-погоне)
 function catchPlayer(G, p, m0) {
@@ -146,8 +153,14 @@ function catchPlayer(G, p, m0) {
 function deadIds() { return joinedList().filter((p) => p.dead).map((p) => p.id); }
 
 // reason — текст для погибшего («Вас поймало существо»), pub — для остальных («его поймало существо»)
+// Что игрок нёс в руках (игрушку), падает на месте — иначе головоломку не решить
+function dropCarried(G, p) {
+  if (p.toy && G.state === 'play') { addObjNet(G, 'toy', { x: p.x, y: p.y, z: p.z, toy: p.toy }); p.toy = null; }
+}
+
 function killPlayer(G, p, reason, pub) {
   if (p.dead || G.state !== 'play') return;
+  dropCarried(G, p);
   p.dead = true; p.deadAt = Date.now();
   G.stats.deaths++;
   p.deaths = (p.deaths || 0) + 1;
@@ -288,7 +301,7 @@ function tick() {
   // кого существа видят: не невидимых и не «одержимых»; при дружелюбных существах — никого
   const hunted = W.friendly ? [] : active.filter((p) => !(p.mods && (p.mods.invis || p.mods.possessed)));
   if (!W.aioff) {
-    G.mobs.forEach((m, k) => updateMob(G, m, dt, hunted, k));
+    if (!G.mobsFrozen) G.mobs.forEach((m, k) => updateMob(G, m, dt, hunted, k)); // заморозка существ (только автотесты) не трогает двойника
     if (G.ss) SS.tickStealer(G, dt, players.filter((p) => p.caged || hunted.includes(p)));
   }
   SS.tickPings(G, dt, players);
@@ -300,7 +313,7 @@ function tick() {
     if (p.invuln > 0) p.invuln -= dt;
     if (touchObjects(G, p)) goalsChanged = true;
     if (!hunted.includes(p) || W.aioff) continue;
-    const m0 = G.mobs.find((m) => m.stun <= 0 && !m.hidden && !m.frozen && p.invuln <= 0 && Math.hypot(m.x - p.x, m.z - p.z) < CATCH_DIST * (m.boss ? 1.6 : 1) &&
+    const m0 = !G.mobsFrozen && G.mobs.find((m) => m.stun <= 0 && !m.hidden && !m.frozen && p.invuln <= 0 && Math.hypot(m.x - p.x, m.z - p.z) < CATCH_DIST * (m.boss ? 1.6 : 1) &&
       (m.type === 'drowner' ? inWater(G, p) && Math.abs(m.y - p.y) < 3 : Math.abs(m.y - p.y) < CATCH_DY));
     if (m0) catchPlayer(G, p, m0);
   }
@@ -361,6 +374,7 @@ function onLeave(c) {
   const G = state.G;
   if (G && G.ss && SS.isMask(G, c.id)) SS.expose(G, `${c.name} покинул игру`); // жертва ушла — маска не держится
   if (G && c.caged) { const cage = G.objs.find((o) => o.id === c.caged); if (cage) cage.prisoner = 0; }
+  if (G && c.joined) dropCarried(G, c);
   if (c.joined) { broadcast({ t: 'ev', text: `${c.name} вышел из игры` }); sendPlayers(); }
   log(`отключился: ${c.name} (онлайн: ${joinedCount()})`);
   if (G && c.joined) { broadcast({ t: 'deadlist', ids: deadIds() }); checkDefeat(G); } // ушёл последний живой — не оставляем призраков одних
@@ -459,7 +473,7 @@ function onMessage(c, msg) {
       G.ss.victim = +msg.id; G.ss.state = 'STEAL'; G.ss.t = 30; G.ss.disguise = null;
       if (v) { const m = G.ss.m; Object.assign(m.body, { x: v.x + 0.5, y: v.y, z: v.z, vy: 0 }); Object.assign(m, { x: v.x + 0.5, y: v.y, z: v.z }); }
     }
-    if (msg.cmd === 'freeze-mobs') for (const m of G.mobs) m.stun = 1e9;
+    if (msg.cmd === 'freeze-mobs') { G.mobsFrozen = true; for (const m of G.mobs) m.stun = 1e9; }
     if (msg.cmd === 'kill') { const v = clientById(+msg.id); if (v) killPlayer(G, v, 'Тест', 'тест'); }
     if (msg.cmd === 'give' && c.items[msg.item] !== undefined) { c.items[msg.item] = 1; c.send({ t: 'items', items: c.items }); }
     if (msg.cmd === 'ss-unmask' && G.ss && G.ss.state === 'IMPERSONATE') G.ss.t = 999;

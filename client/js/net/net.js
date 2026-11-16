@@ -64,6 +64,8 @@ function onNet(m) {
       if (m.cells && m.cells.length) for (const c of m.cells) setCellLocal(c.f, c.i, c.type, c.aux);
       for (const o of m.obst || []) addObstacleNet(o);
       S.cctvUntil = 0; S.blackoutUntil = 0; S.finale = false; S.powered = !!m.powered;
+      S.countdownEnd = 0; S.drumUntil = 0; S.drawingsAlive = false; $('countdown').classList.remove('on');
+      $('game').classList.remove('drawings', 'quarantine'); $('gasfx').classList.remove('on');
       hideBanner(); renderGoals();
       showLevelTitle(m.level);
       S.joined = true;
@@ -146,12 +148,18 @@ function onNet(m) {
       toast({ drown: 'Вы захлебнулись и очнулись в другом месте…', stuck: 'Вы вернулись к началу уровня', caught: 'Существо поймало вас! Вы очнулись в другом месте…' }[m.reason] || 'Вы очнулись в другом месте…', 3500);
       break;
     }
-    case 'done':
+    case 'done': {
       sfx.win();
-      showBanner(m.last
-        ? 'ВЫ ВЫБРАЛИСЬ ИЗ ЗАКУЛИСЬЯ<br><small>Но стены так похожи на те, с которых вы начинали…<br>Игра начнётся заново.</small>'
-        : `УРОВЕНЬ ПРОЙДЕН<br><small>Дальше: ${m.next}</small>`);
+      S.countdownEnd = 0; S.drumUntil = 0; $('countdown').classList.remove('on');
+      const st = m.stats || {};
+      const stats = `<span class="endstats">время ${Math.floor((st.time || 0) / 60)}:${String((st.time || 0) % 60).padStart(2, '0')} · смертей ${st.deaths || 0} · записок ${st.notes || 0}` + (st.exposed ? ` · двойников разоблачено ${st.exposed}` : '') + '</span>';
+      let html;
+      if (!m.last) html = `УРОВЕНЬ ПРОЙДЕН<br><small>Дальше: ${m.next}</small>${stats}`;
+      else if (m.ending === 'stay') html = `${m.by || 'Кто-то'} ОСТАЛСЯ НАДСМОТРЩИКОМ<br><small>Кресло тёплое. Пульт гудит. Где-то загорелись жёлтые лампы, и новые люди проснулись на мокром ковре.<br>Фабрика будет работать вечно — теперь её строите вы.<br>Игра начнётся заново.</small>${stats}`;
+      else html = `ФАБРИКА РАЗРУШЕНА<br><small>Вы вышли под чёрное небо, и Закулисье рассыпалось за спиной, как старые обои.<br>Солнечный свет. Шум машин. Ваш дом…<br>…но в коридоре гудит лампа. Игра начнётся заново.</small>${stats}`;
+      showBanner(html);
       break;
+    }
     case 'ev': toast(m.text, 3000); break;
     case 'water': setWater(m.wl); break;
     case 'add': addObj(m.o); break;
@@ -182,6 +190,22 @@ function onEvent(m) {
       const fl = $('flash'); fl.classList.add('on'); setTimeout(() => fl.classList.remove('on'), 120);
       break;
     }
+    case 'quarantine': {
+      S.quarantineUntil = now + (m.dur || 25); sfx.alarm(); $('game').classList.add('quarantine');
+      setTimeout(() => $('game').classList.remove('quarantine'), (m.dur || 25) * 1000);
+      break;
+    }
+    case 'gas': $('gasfx').classList.add('on'); sfx.cough(); setTimeout(() => sfx.cough(), 1500); setTimeout(() => $('gasfx').classList.remove('on'), (m.dur || 8) * 1000); break;
+    case 'countdown': {
+      S.countdownEnd = now + m.left;
+      $('countdown').classList.add('on');
+      if (m.left <= 10) sfx.tick();
+      break;
+    }
+    case 'flash': { const fl = $('flash'); fl.classList.add('on'); setTimeout(() => fl.classList.remove('on'), 900); sfx.boom(1); break; }
+    case 'drawings': S.drawingsAlive = true; $('game').classList.add('drawings'); sfx.giggle(); break;
+    case 'drum': S.drumUntil = now + 9999; break;
+    case 'conveyor': sfx.clang(); setTimeout(() => sfx.clang(), 300); break;
     case 'caralarms': for (let k = 0; k < 3; k++) setTimeout(() => sfx.caralarm(0.7), k * 400); toast('Генератор взревел — по всей парковке воют сигнализации!', 3500); break;
   }
 }

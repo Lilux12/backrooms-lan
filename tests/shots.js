@@ -45,7 +45,7 @@ const FIND = `(kind) => {
     }
   }
   if (kind === 'landmark') { // знаковое место уровня (по данным генератора)
-    const order = ['hall', 'cinema', 'chandelier', 'upside', 'boiler', 'shaft', 'booth', 'surgery', 'morgue', 'glassroom', 'serverroom', 'roofgen', 'endless', 'fountain'];
+    const order = ['reactor', 'stage', 'gears', 'specimen', 'hall', 'cinema', 'chandelier', 'upside', 'boiler', 'shaft', 'booth', 'surgery', 'morgue', 'glassroom', 'serverroom', 'roofgen', 'endless', 'fountain'];
     for (const k of order) {
       const e = m.fx.find((q) => q.k === k);
       if (!e) continue;

@@ -178,3 +178,13 @@ button.small:hover { border-color: var(--y); }
 #aConsole input { width: 100%; }
 #aResult { padding: 4px 14px 10px; min-height: 18px; }
 #aResult.ok { color: var(--ok); } #aResult.bad { color: var(--bad); }
+
+/* обратный отсчёт (реактор), газ, карантин */
+#countdown { position: absolute; top: 64px; left: 0; right: 0; text-align: center; font-size: 46px; letter-spacing: 6px; color: #ff4030; text-shadow: 0 0 18px rgba(255,40,20,.7), 0 0 3px #000; display: none; }
+#countdown.on { display: block; animation: cdpulse 1s infinite; }
+@keyframes cdpulse { 50% { opacity: .55; } }
+#gasfx { background: radial-gradient(ellipse at center, rgba(120,200,60,.15), rgba(80,160,30,.55)); opacity: 0; transition: opacity 1.2s; }
+#gasfx.on { opacity: 1; }
+#game.quarantine { filter: saturate(1.4) hue-rotate(-20deg) brightness(.9); }
+#game.drawings { filter: hue-rotate(35deg) saturate(1.6); }
+#banner .endstats { display: block; margin-top: 14px; font-size: 15px; opacity: .8; letter-spacing: 1px; }
