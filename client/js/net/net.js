@@ -1,0 +1,128 @@
+// Соединение с сервером и обработка сообщений
+import { $, LEVELS } from '../core/util.js';
+import { FL, S, UP, keypad, me } from '../core/state.js';
+import { scene } from '../render/scene.js';
+import { buildWorld, curLevel, objs, world } from '../world/world.js';
+import { refreshObj } from '../world/objects.js';
+import { remotes, setPlayers } from '../entities/avatars.js';
+import { ensureMobs, mobEnts } from '../entities/mobs.js';
+import { sfx, tone } from '../audio/audio.js';
+import { closeKeypad, hideBanner, renderGoals, setStatus, showBanner, showLevelTitle, showNote, toast, updateKeypad } from '../ui/hud.js';
+import { beginPlay } from '../ui/menu.js';
+import { closeBigMap } from '../ui/maps.js';
+
+/* ============================== Сеть ============================== */
+let ws = null;
+export function connect(name) {
+  if (location.protocol === 'file:') {
+    setStatus('Откройте игру через сервер: запустите start.bat (адрес http://localhost:3000)');
+    return;
+  }
+  ws = new WebSocket(`ws://${location.host}`);
+  ws.onopen = () => ws.send(JSON.stringify({ t: 'join', name }));
+  ws.onmessage = (e) => onNet(JSON.parse(e.data));
+  ws.onclose = () => {
+    S.joined = false;
+    showBanner('Соединение с сервером потеряно.<br><small>Обновите страницу (F5)</small>');
+    document.exitPointerLock();
+  };
+  ws.onerror = () => setStatus('Не удалось подключиться к серверу');
+}
+export const sendNet = (o) => { if (ws && ws.readyState === 1) ws.send(JSON.stringify(o)); };
+
+
+
+function onNet(m) {
+  switch (m.t) {
+    case 'init': {
+      S.myId = m.id;
+      buildWorld(m.level, m.seed, m.objs);
+      for (const r of remotes.values()) scene.remove(r.mesh);
+      remotes.clear();
+      ensureMobs(0, LEVELS[m.level].mobType);
+      UP.map = !!(m.upgrades && m.upgrades.map);
+      closeBigMap();
+      if (LEVELS[m.level].chase) FL.on = false;
+      me.x = m.spawn.x; me.z = m.spawn.z; me.yaw = Math.PI * 0.5; me.pitch = 0;
+      me.stamina = 1; me.exhausted = false;
+      S.goalLines = m.goals; S.heldFuses = m.held;
+      closeKeypad(); $('note').style.display = 'none';
+      setPlayers(m.players);
+      hideBanner(); renderGoals();
+      showLevelTitle(m.level);
+      S.joined = true;
+      if (!S.started) beginPlay();
+      break;
+    }
+    case 'players': setPlayers(m.list); break;
+    case 's': {
+      for (const [id, x, z, r, fl] of m.p) {
+        const rem = remotes.get(id);
+        if (!rem) continue;
+        rem.tx = x; rem.tz = z; rem.tr = r; rem.fl = !!fl;
+        if (!rem.seen) { rem.x = x; rem.z = z; rem.r = r; rem.seen = true; rem.mesh.visible = true; }
+      }
+      ensureMobs(m.m.length, LEVELS[curLevel].mobType);
+      m.m.forEach(([x, z, r, chase, stun], i) => {
+        const mo = mobEnts[i];
+        mo.tx = x; mo.tz = z; mo.tr = r; mo.chase = !!chase; mo.stun = !!stun;
+        if (!mo.seen) { mo.x = x; mo.z = z; mo.r = r; mo.seen = true; mo.group.visible = true; }
+      });
+      break;
+    }
+    case 'obj': {
+      const rec = objs.get(m.id);
+      if (!rec) break;
+      const wasOpen = rec.o.open;
+      Object.assign(rec.o, m.p);
+      refreshObj(rec);
+      if (rec.o.kind === 'door' && rec.o.open && !wasOpen) sfx.door();
+      if (rec.o.kind === 'plate') sfx.click();
+      break;
+    }
+    case 'pick': {
+      const rec = objs.get(m.id);
+      if (rec) { world.remove(rec.group); objs.delete(m.id); }
+      m.kind === 'fuse' ? sfx.fuse() : sfx.pickup();
+      if (m.kind !== 'mapitem') toast(m.kind === 'fuse' ? `${m.by} нашёл предохранитель` : `${m.by} нашёл воду`, 2000);
+      break;
+    }
+    case 'upgrade':
+      UP.map = true; sfx.win();
+      toast(`${m.by} нашёл УЛУЧШЕННУЮ КАРТУ! M — карта на весь экран, существа видны на ней`, 6000);
+      break;
+    case 'stamina': me.stamina = 1; me.exhausted = false; toast('Вода: выносливость восстановлена', 2000); break;
+    case 'goal': {
+      S.goalLines = m.lines; S.heldFuses = m.held; renderGoals();
+      for (const rec of objs.values()) {
+        if (rec.o.kind === 'box') rec.parts.screen.material.color.setHex(S.goalLines.some((l) => l.startsWith('Предохранители') && l.includes('✔')) ? 0x30ff60 : 0xff3020);
+        if (rec.o.kind === 'keypad') rec.parts.screen.material.color.setHex(S.goalLines.some((l) => l.startsWith('Код') && l.includes('✔')) ? 0x30ff60 : 0xff3020);
+      }
+      break;
+    }
+    case 'note': showNote(m.text); break;
+    case 'codeok': closeKeypad(); sfx.beep(); break;
+    case 'codebad': keypad.buf = ''; updateKeypad(); tone(150, 0.5, 0.3, 'sawtooth'); break;
+    case 'alarm': S.alarmUntil = performance.now() / 1000 + 6; sfx.alarm(); toast('СИРЕНА! Существа идут на шум!', 3500); break;
+    case 'sfx': if (sfx[m.name]) sfx[m.name](); break;
+    case 'caught': {
+      me.x = m.x; me.z = m.z;
+      sfx.caught();
+      const fl = $('flash'); fl.classList.add('on');
+      setTimeout(() => fl.classList.remove('on'), 80);
+      toast('Существо поймало вас! Вы очнулись в другом месте…', 3500);
+      break;
+    }
+    case 'done':
+      sfx.win();
+      showBanner(m.last
+        ? 'ВЫ ВЫБРАЛИСЬ ИЗ ЗАКУЛИСЬЯ<br><small>Но стены так похожи на те, с которых вы начинали…<br>Игра начнётся заново.</small>'
+        : `УРОВЕНЬ ПРОЙДЕН<br><small>Дальше: ${m.next}</small>`);
+      break;
+    case 'ev': toast(m.text, 3000); break;
+  }
+}
+
+setInterval(() => {
+  if (S.joined) sendNet({ t: 'p', x: +me.x.toFixed(2), z: +me.z.toFixed(2), r: +me.yaw.toFixed(3), f: FL.on ? 1 : 0 });
+}, 50);
