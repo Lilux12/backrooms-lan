@@ -88,10 +88,11 @@ function verifyLevel(lv, BRB) {
         const r = BR.bfsNav(nv, G.map.spawnNode), bk = BR.bfsNav(nv, G.map.spawnNode, true);
         for (let n = 0; n < nv.total; n++) if (r[n] >= 0 && bk[n] < 0) assert.fail(`${tag}, шаг «${st.name}»: ловушка в узле ${n}`);
         for (const o of G.objs) {
-          if (!st.need.includes(o.kind)) continue;
+          if (!st.need.includes(o.kind) && !st.need.includes(`${o.kind}:${o.group}`)) continue;
           const n = objNode(o);
           assert(n >= 0 && r[n] >= 0, `${tag}, шаг «${st.name}»: объект ${o.kind} недостижим`);
         }
+        for (const k of st.need) assert(G.objs.some((o) => o.kind === k || `${o.kind}:${o.group}` === k), `${tag}, шаг «${st.name}»: нет объекта ${k}`);
         if (st.exit) assert(r[G.map.exit.frontNode] >= 0, `${tag}: выход недостижим`);
       }
     } else {
@@ -100,7 +101,7 @@ function verifyLevel(lv, BRB) {
       const r2 = BR.bfsNav(nav2, G.map.spawnNode);
       assert(r2[G.map.exit.frontNode] >= 0, `${tag}: выход недостижим`);
       for (const o of G.objs) {
-        if (o.kind === 'arrow' || o.kind === 'door') continue;
+        if (o.kind === 'arrow' || o.kind === 'door' || o.kind === 'lift') continue;
         const n = objNode(o);
         assert(n >= 0 && r2[n] >= 0, `${tag}: объект ${o.kind} (${o.x.toFixed(1)}, ${o.y}, ${o.z.toFixed(1)}) недостижим`);
       }

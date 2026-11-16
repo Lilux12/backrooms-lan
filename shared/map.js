@@ -4,7 +4,7 @@
 (function (root) {
   'use strict';
   const isNode = typeof module === 'object' && module.exports;
-  const BR = isNode ? (require('./core.js'), require('./world.js'), require('./gen2d.js'), require('./build.js'), require('./levels/pools.js')) : root.BR;
+  const BR = isNode ? (require('./core.js'), require('./world.js'), require('./gen2d.js'), require('./build.js'), require('./levels/index.js')) : root.BR;
   const { TILE, N, NN, T, D4, mulberry32, shuffle, cellX, cellZ, inner } = BR;
 
   /* ------------------------------ Кампания ------------------------------
@@ -17,51 +17,47 @@
   */
   const LEVELS = [
     {
-      name: 'Жёлтые комнаты', style: 'yellow', F: 2, FH: 3.4, spawnF: 1, exitF: 1,
-      floors: [
-        { gen: 'maze', p: { straight: 0.55, rooms: 8, roomMin: 3, roomMax: 5, loops: 200, pillars: false } }, // нижний этаж: мокрый ковёр
-        { gen: 'maze', p: { straight: 0, rooms: 16, roomMin: 3, roomMax: 8, loops: 140, pillars: true } },
-      ],
-      build(map, rnd, used) {
-        BR.addStairs(map, rnd, 0, 3, used);
-        BR.addLadders(map, rnd, 0, 3, used);
-        BR.addHoles(map, rnd, 1, 7, 2);
-        BR.addLow(map, rnd, 1, 7, 5);
-        BR.addFlood(map, rnd, 0, 60, 0.25);
-      },
+      name: 'Жёлтые комнаты', style: 'yellow', custom: 'yellow', F: 2, FH: 3.4, spawnF: 1, exitF: 1,
       mobs: 1, mobType: 'stalker', mobSpeed: 1.0, water: 4, mapChance: 0.7,
       skinstealer: true, items: { detector: 1, noisemaker: 2 },
-      puzzles: ['fuses'], fuses: 3,
-      intro: 'Электричество отключено. Найдите 3 предохранителя и вставьте их в щиток — дверь выхода оживёт. Осторожно: пол местами провален, внизу — мокрые коридоры. И не доверяйте никому: здесь бродит существо, которое крадёт облик. Проверяйте друг друга (G — жест, Y — кодовое слово, луч фонаря, детектор).',
-    },
-    {
-      name: 'Подземная парковка', style: 'concrete', F: 2, FH: 3.8, spawnF: 1, exitF: 0,
-      floors: [{ gen: 'halls', p: { walls: 12, blocks: 30 } }, { gen: 'halls', p: { walls: 14, blocks: 26 } }],
-      build(map, rnd, used) {
-        BR.addStairs(map, rnd, 0, 4, used);
-        BR.addLadders(map, rnd, 0, 1, used);
-        BR.addFlood(map, rnd, 0, 140, 0.45);
-      },
-      mobs: 1, mobType: 'stalker', mobSpeed: 1.05, water: 3, mapChance: 0.35,
-      puzzles: ['code'],
-      intro: 'Код от шлагбаума нацарапан на стенах обоих ярусов. Найдите все 4 цифры и введите код на терминале у выхода на нижнем ярусе. Включите фонарь (F) — здесь темно.',
-    },
-    {
-      name: 'Технические тоннели', style: 'tunnel', F: 3, FH: 2.9, spawnF: 2, exitF: 0,
-      floors: [
-        { gen: 'maze', p: { straight: 0.82, rooms: 4, roomMin: 3, roomMax: 4, loops: 22, pillars: false } },
-        { gen: 'maze', p: { straight: 0.85, rooms: 3, roomMin: 3, roomMax: 4, loops: 18, pillars: false } },
-        { gen: 'maze', p: { straight: 0.8, rooms: 4, roomMin: 3, roomMax: 4, loops: 22, pillars: false } },
+      puzzles: ['fuses'], fuses: 3, fuseFloors: [0], breaker: { latch: 14 },
+      intro: 'Электричество отключено. Найдите 3 предохранителя (один — внизу, в мокрых коридорах под провалом) и вставьте их в щиток. Щиток включится, только пока кто-то держит рубильник. И не доверяйте никому: здесь бродит существо, которое крадёт облик. Проверяйте друг друга (G — жест, Y — кодовое слово, луч фонаря, детектор).',
+      lore: [
+        { title: 'Записка на обоях', text: 'Я считал лампы. 4 812. Потом начал заново и насчитал 4 813. Одна лишняя. Она не гудит.' },
+        { title: 'Список, приколотый к колонне', text: 'Нас было пятеро:\nКатя — ушла за водой\nМиша — ушёл за Катей\nКатя — вернулась\nКатя — вернулась\nНе верьте Кате.' },
+        { title: 'Мокрый листок (нижний этаж)', text: 'Коридор внизу не кончается. Я шёл шесть часов и вернулся к той же двери. На ней моя записка. Эта.' },
+        { title: 'Инструкция электрика', text: 'Щиток Б-7. Перед подачей питания ДЕРЖАТЬ РУБИЛЬНИК. Одному не справиться — пусть второй держит. Если второго нет, у вас секунд пятнадцать.' },
       ],
-      build(map, rnd, used) {
-        for (let f = 0; f < 2; f++) { BR.addLadders(map, rnd, f, 4, used); BR.addStairs(map, rnd, f, 1, used); }
-        for (let f = 0; f < 3; f++) BR.addVents(map, rnd, f, 8);
-        BR.addHoles(map, rnd, 2, 3, 1);
-        BR.addHoles(map, rnd, 1, 2, 1);
-      },
-      mobs: 1, mobType: 'stalker', mobSpeed: 1.1, water: 3,
-      puzzles: ['plates'],
-      intro: 'Дверь внизу откроется, только когда нажаты ОБЕ плиты. Каждая держится около 20 секунд. Тоннели связаны колодцами с лестницами, а через лазы (C — ползти) можно срезать путь.',
+    },
+    {
+      name: 'Подземная парковка', style: 'concrete', custom: 'parking', F: 3, FH: 3.6, spawnF: 2, exitF: 0,
+      mobList: [{ type: 'headlights', count: 2 }], mobSpeed: 1.0, water: 3, mapChance: 0.35,
+      puzzles: ['code', 'parking'], codeFloors: [2, 1, 0, 0], uvDigits: true, codePower: { latch: 20 }, cctvDigits: true,
+      intro: 'Три яруса бетона. Цифры кода написаны краской, которая видна только в свете фонаря (F). Терминал у шлагбаума внизу обесточен — рядом генератор. В будке охраны есть рация и камеры. Не бегайте у машин: сигнализация зовёт «Фары».',
+      radio: [
+        '…кх… Кто здесь? Я охранник третьего яруса. Слушайте: цифры на стенах — люминесцентная краска. Без фонаря их не видно. Светите на стены.',
+        '…шшш… По цифре на каждом ярусе, последние две — внизу, в воде. Терминал у шлагбаума на нижнем ярусе.',
+        '…Терминал без питания мёртв. Генератор рядом. Запустите его и сразу вводите код — он долго не протянет. Вдвоём проще: один держит, другой вводит.',
+        '…И не бегите возле машин. Сигнализация сработает, и ОНИ придут на звук. Фары. Они всегда стоят спиной… пока не услышат.',
+        '…Монитор в будке показывает камеры. На записи иногда видно, где написана цифра. И где стоят Они.',
+        '…кх… …я всё ещё здесь… …двенадцать лет на смене… …кто-нибудь, выключите свет в будке…',
+      ],
+      lore: [
+        { title: 'Парковочный талон', text: 'Въезд: 23:58. Выезд: —\nМесто: Б-ххх\n«Сохраняйте талон до выезда».\nНа обороте карандашом: «я не могу найти машину уже три дня».' },
+        { title: 'Журнал охраны', text: '02:10 — на ярусе 2 сработала сигнализация, никого.\n02:14 — снова.\n02:15 — у машины стоит человек с фарами вместо глаз. Стоит спиной.\n02:16 — он повернулся.' },
+        { title: 'Объявление', text: 'ВНИМАНИЕ! Нижний ярус подтоплен. Генератор аварийного питания — у шлагбаума. Не оставляйте его без присмотра.' },
+      ],
+    },
+    {
+      name: 'Технические тоннели', style: 'tunnel', custom: 'tunnels', F: 3, FH: 2.9, spawnF: 2, exitF: 0,
+      mobList: [{ type: 'worm', count: 1 }], mobSpeed: 1.0, water: 3,
+      puzzles: ['steam'],
+      intro: 'Выход за паровым шлюзом на нижнем ярусе. Дайте давление вентилем в котельной, потом нажмите ОБЕ плиты — они на разных ярусах. Шлюз открыт, пока плиты держат. В трубах живёт Червь: он чувствует, когда вы бежите. Идите шагом — или ползите (C).',
+      lore: [
+        { title: 'Журнал обходчика', text: 'Трубы стучат, когда я бегу. Когда я иду — молчат. Когда я стою — стучат всё равно. Ближе.' },
+        { title: 'Схема шлюза', text: 'Шлюз ПШ-1 открывается при давлении пара в контуре и замкнутых датчиках А и Б (плиты на разных ярусах). Держатся ~25 с. Изнутри — аварийная кнопка.' },
+        { title: 'Записка на мостках', text: 'Не смотри вниз. Там дно. На дне — лестница. Если упал — лезь, не жди, пока застучит.' },
+      ],
     },
     {
       name: 'Бассейны', style: 'pool', custom: 'pools', F: 4, FH: 4.0, spawnF: 1, exitF: 3,
@@ -76,27 +72,21 @@
       ],
     },
     {
-      name: 'Беги!', tag: 'LEVEL !', style: 'run', F: 1, FH: 3.4, spawnF: 0, exitF: 0,
-      floors: [{ gen: 'run' }],
-      mobs: 3, mobType: 'runner', mobSpeed: 1.35, water: 0,
-      chase: true, infStamina: true, puzzles: [],
-      intro: 'Дверь в конце коридора уже открыта. Как только вы выйдете из укрытия, за вами бросится стая. Бегите, огибайте мебель, не останавливайтесь. Выносливость здесь не кончается.',
+      name: 'Беги!', tag: 'LEVEL !', style: 'run', custom: 'hospital', F: 2, FH: 3.4, spawnF: 0, exitF: 1,
+      mobs: 3, mobType: 'runner', mobSpeed: 1.25, water: 0,
+      chase: true, infStamina: true, puzzles: ['hospital'],
+      intro: 'Больница. Дверь на втором этаже уже открыта. Как только вы выйдете из ниши, стая бросится следом — и с каждой минутой она быстрее. Палаты срезают путь, но двери в них захлопываются. Не врезайтесь в мебель: споткнётесь.',
     },
     {
-      name: 'Офисы', style: 'office', F: 3, FH: 3.2, spawnF: 0, exitF: 2,
-      floors: [
-        { gen: 'rooms', p: { extra: 10, doorW: 1, pillar: 0, cubicle: 0.7 } },
-        { gen: 'rooms', p: { extra: 12, doorW: 1, pillar: 0, cubicle: 0.6 } },
-        { gen: 'rooms', p: { extra: 10, doorW: 1, pillar: 0, cubicle: 0.7 } },
+      name: 'Офисы', style: 'office', custom: 'offices', F: 3, FH: 3.2, spawnF: 0, exitF: 2,
+      mobList: [{ type: 'stalker', count: 1 }, { type: 'crawler', count: 1 }], mobSpeed: 1.1, water: 4,
+      puzzles: ['fuses', 'code', 'offices'], fuses: 2, codeNeedsFuses: true, keypadPoi: true,
+      intro: 'Бизнес-центр. Верните питание (2 предохранителя в щиток), найдите 4 цифры кода и введите его на терминале в стеклянной переговорной наверху. Дверь переговорной открывается кнопкой на ресепшене. Камеры в серверной показывают, где существа. Их двое: Сталкер ходит по этажам, Ползун — по вентиляции.',
+      lore: [
+        { title: 'Служебная записка', text: 'Коллеги! Напоминаем: переговорная Б бронируется через ресепшен. Дверь открывается только с ресепшена. Изнутри — красная кнопка. Пожалуйста, не оставляйте людей внутри на выходные.' },
+        { title: 'Распечатка из принтера', text: 'ОТЧЁТ ЗА КВАРТАЛ\nСотрудников: 48\nСотрудников: 47\nСотрудников: 47\nСотрудников: 46\nСотрудников: 4\nСотрудников: ' },
+        { title: 'Стикер на мониторе', text: 'В вентиляции кто-то ползает. Сисадмин говорит — крысы. Крысы не говорят «привет».' },
       ],
-      build(map, rnd, used) {
-        BR.addAtrium(map, rnd, 0, 4);
-        for (let f = 0; f < 2; f++) { BR.addStairs(map, rnd, f, 2, used); BR.addLadders(map, rnd, f, 1, used); }
-        BR.addLow(map, rnd, 1, 4, 4);
-      },
-      mobs: 2, mobType: 'stalker', mobSpeed: 1.1, water: 4,
-      puzzles: ['fuses', 'code'], fuses: 2,
-      intro: 'Три этажа офиса. Верните питание лифту (2 предохранителя) и введите код на терминале наверху. Здесь вас двое преследователей.',
     },
   ];
 
@@ -133,8 +123,8 @@
       const t = map.t[Math.floor(n / NN)][n % NN];
       if (t === T.FLOOR || t === T.LOW) map.spots.push(n);
     }
-    map.exit = pickExit(map, rnd, L.exitF);
-    map.obst = L.floors && L.floors[0].gen === 'run' ? BR.genObstacles(rnd) : [];
+    map.exit = map.exitFixed ? fixedExit(map, map.exitFixed) : pickExit(map, rnd, L.exitF);
+    map.obst = map.obst || (L.floors && L.floors[0].gen === 'run' ? BR.genObstacles(rnd) : []);
     map.hash = BR.mapHash(map);
     return map;
   }
@@ -175,6 +165,18 @@
       fx: BR.centerX(ex.fl), fz: BR.centerZ(ex.fl), // пол перед дверью
       dx: -D4[ex.fd][0], dz: -D4[ex.fd][1],          // направление от пола к двери
       frontNode: f * NN + ex.fl,
+    };
+  }
+
+  // Выход, заданный генератором уровня: { f, wall — клетка-стена двери, floor — клетка пола перед ней }
+  function fixedExit(map, e) {
+    const fd = D4.findIndex(([dx, dz]) => cellX(e.floor) + dx === cellX(e.wall) && cellZ(e.floor) + dz === cellZ(e.wall));
+    map.t[e.f][e.wall] = T.WALL;
+    const y = e.f * map.FH;
+    return {
+      f: e.f, y, cell: e.wall, tx: cellX(e.wall), ty: cellZ(e.wall),
+      wx: BR.centerX(e.wall), wz: BR.centerZ(e.wall), fx: BR.centerX(e.floor), fz: BR.centerZ(e.floor),
+      dx: D4[fd][0], dz: D4[fd][1], frontNode: e.f * NN + e.floor, // направление от пола к двери
     };
   }
 

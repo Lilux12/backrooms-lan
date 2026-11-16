@@ -1,8 +1,8 @@
 // Соединение с сервером и обработка сообщений
-import { $, LEVELS } from '../core/util.js';
+import { $, BR, LEVELS } from '../core/util.js';
 import { FL, S, UP, keypad, me } from '../core/state.js';
 import { scene } from '../render/scene.js';
-import { addObj, buildWorld, curLevel, objs, removeObj, setCellLocal, setWater } from '../world/world.js';
+import { addObj, addObstacleNet, buildWorld, curLevel, map, objs, removeObj, setCellLocal, setWater } from '../world/world.js';
 import { refreshObj } from '../world/objects.js';
 import { remotes, setPlayers } from '../entities/avatars.js';
 import { ensureMob, ensureMobs, mobEnts } from '../entities/mobs.js';
@@ -18,7 +18,7 @@ import { closeBigMap } from '../ui/maps.js';
 
 /* ============================== Сеть ============================== */
 let ws = null;
-const MOB_TYPES = ['stalker', 'runner', 'drowner', 'skinstealer']; // как на сервере (server/game.js)
+const MOB_TYPES = BR.MOB_TYPES; // общий список с сервером (shared/core.js)
 export function connect(name) {
   if (location.protocol === 'file:') {
     setStatus('Откройте игру через сервер: запустите start.bat (адрес http://localhost:3000)');
@@ -60,6 +60,10 @@ function onNet(m) {
       S.goalLines = m.goals; S.heldFuses = m.held;
       closeKeypad(); $('note').style.display = 'none';
       setPlayers(m.players); setAdminPlayers(m.players);
+      // изменения уровня, случившиеся до нашего подключения: открытые шлюзы, проломы, упавшие каталки
+      if (m.cells && m.cells.length) for (const c of m.cells) setCellLocal(c.f, c.i, c.type, c.aux);
+      for (const o of m.obst || []) addObstacleNet(o);
+      S.cctvUntil = 0; S.blackoutUntil = 0; S.finale = false;
       hideBanner(); renderGoals();
       showLevelTitle(m.level);
       S.joined = true;
@@ -118,14 +122,27 @@ function onNet(m) {
     case 'note': showNote(m.text, m.title); break;
     case 'cell': setCellLocal(m.f, m.i, m.type, m.aux); break;
     case 'codeok': closeKeypad(); sfx.beep(); break;
-    case 'codebad': keypad.buf = ''; updateKeypad(); tone(150, 0.5, 0.3, 'sawtooth'); break;
+    case 'codebad': keypad.buf = ''; updateKeypad(); tone(m.off ? 90 : 150, 0.5, 0.3, 'sawtooth'); break;
     case 'alarm': S.alarmUntil = performance.now() / 1000 + 6; sfx.alarm(); toast('СИРЕНА! Существа идут на шум!', 3500); break;
-    case 'sfx': if (sfx[m.name]) sfx[m.name](); break;
+    case 'sfx': {
+      if (!sfx[m.name]) break;
+      // звук с точкой: дальше 60 м не слышно, ближе — громкость по расстоянию
+      if (m.x != null) {
+        const d = Math.hypot(m.x - me.x, (m.y - me.y) * 1.5, m.z - me.z);
+        if (d > 60) break;
+        sfx[m.name](Math.max(0.15, 1 - d / 60));
+      } else sfx[m.name]();
+      break;
+    }
+    case 'event': onEvent(m); break;
+    case 'cctv': S.cctvUntil = performance.now() / 1000 + m.dur; sfx.beep(); break;
+    case 'obst': addObstacleNet(m.o); if (Math.hypot(m.o.x - me.x, m.o.z - me.z) < 30) sfx.crash(); break;
     case 'caught': {
       placeMe(m.x, m.y, m.z);
       sfx.caught();
       const fl = $('flash'); fl.classList.add('on');
       setTimeout(() => fl.classList.remove('on'), 80);
+      if (m.reason === 'lift' || m.reason === 'admin') { sfx.lift(); break; }
       toast({ drown: 'Вы захлебнулись и очнулись в другом месте…', stuck: 'Вы вернулись к началу уровня', caught: 'Существо поймало вас! Вы очнулись в другом месте…' }[m.reason] || 'Вы очнулись в другом месте…', 3500);
       break;
     }
@@ -143,6 +160,23 @@ function onNet(m) {
       if (rec && rec.parts.setPrisoner) rec.parts.setPrisoner(m.name);
       break;
     }
+  }
+}
+
+// События уровня от сервера: свет гаснет, тряска, пар, пролом, финальный побег
+function onEvent(m) {
+  const now = performance.now() / 1000;
+  switch (m.k) {
+    case 'blackout': S.blackoutUntil = now + (m.dur || 3); sfx.zap(); toast('Перегрузка! Свет погас…', 2500); break;
+    case 'quake': me.shake = Math.max(me.shake || 0, 0.4 * (m.dur || 1)); sfx.rumble(); break;
+    case 'steam': sfx.steam(); toast('Трубы зашипели — пошёл пар', 2500); break;
+    case 'smash': {
+      const d = Math.hypot(m.x - me.x, m.z - me.z);
+      sfx.boom(Math.max(0.2, 1 - d / 50)); if (d < 20) me.shake = Math.max(me.shake || 0, 0.6 * (1 - d / 20));
+      break;
+    }
+    case 'finale': S.finale = true; sfx.roar(); toast('Они почуяли, что вы уходите! БЕГИТЕ К ВЫХОДУ!', 4000); break;
+    case 'caralarms': for (let k = 0; k < 3; k++) setTimeout(() => sfx.caralarm(0.7), k * 400); toast('Генератор взревел — по всей парковке воют сигнализации!', 3500); break;
   }
 }
 

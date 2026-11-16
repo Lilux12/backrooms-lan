@@ -36,7 +36,7 @@ export const STYLES = {
   concrete: {
     fog: 0x1b1e22, fogD: 0.042, hemi: [0x9fb0c4, 0x2d3036, 1.2], sun: [0xdfe6f0, 0.55], lamp: [0xcfe0ff, 5.2],
     panel: { c: [0.82, 0.92, 1], size: 1.3, test: (x, y, h) => x % 4 === 2 && y % 4 === 2 && h > 0.28 },
-    flick: [2.5, 8], hum: [50, 100, 150, 50], amb: 'rumble', fr: FULL / 4, cr: FULL / 4,
+    flick: [2.5, 8], hum: [50, 100, 150, 50], amb: 'rumble', fr: FULL / 4, cr: FULL / 4, ramp: true,
     tex: () => ({
       wall: makeTex(256, (g, s) => {
         g.fillStyle = '#6e7176'; g.fillRect(0, 0, s, s);

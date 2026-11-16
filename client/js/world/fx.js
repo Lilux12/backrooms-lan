@@ -2,7 +2,7 @@
 // пар в саунах, буйки на воде, фонтан, вышки, шезлонги, детская горка, круги в «ленивой реке».
 import * as THREE from 'three';
 import { BR } from '../core/util.js';
-import { glowTexture } from '../render/textures.js';
+import { glowSprite, glowTexture } from '../render/textures.js';
 
 const lam = (color, emissive = 0) => new THREE.MeshLambertMaterial({ color, emissive });
 
@@ -25,7 +25,7 @@ export function buildFx(map) {
   for (const e of map.fx) {
     switch (e.k) {
       case 'steam': {
-        const n = 70, pts = particles(n, 0xeef4f2, 2.2, 0.16);
+        const n = e.small ? 30 : 70, pts = particles(n, 0xeef4f2, e.small ? 1.4 : 2.2, e.small ? 0.12 : 0.16);
         const life = [], pos = pts.geometry.attributes.position.array;
         for (let i = 0; i < n; i++) life.push(Math.random());
         updaters.push((dt) => {
@@ -39,8 +39,8 @@ export function buildFx(map) {
           }
           pts.geometry.attributes.position.needsUpdate = true;
         });
-        const lamp = new THREE.PointLight(0xffb070, 1.6, 7, 1.5); lamp.position.set(e.x, e.y + 2.4, e.z);
-        group.add(pts, lamp);
+        group.add(pts);
+        if (!e.small) { const lamp = new THREE.PointLight(0xffb070, 1.6, 7, 1.5); lamp.position.set(e.x, e.y + 2.4, e.z); group.add(lamp); }
         break;
       }
       case 'buoys': {
@@ -143,8 +143,148 @@ export function buildFx(map) {
         });
         break;
       }
+      default: buildFxMore(e, map, group, updaters);
     }
   }
   let time = 0;
   return { group, update(dt) { time += dt; for (const u of updaters) u(dt, time); } };
+}
+
+/* ------------------ Знаковые места уровней (декор по данным генератора) ------------------ */
+const T4 = 4;
+const boxM = (w, h, d, mat, x, y, z) => { const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), mat); m.position.set(x, y, z); return m; };
+const cylM = (rt, rb, h, mat, x, y, z, seg = 10) => { const m = new THREE.Mesh(new THREE.CylinderGeometry(rt, rb, h, seg), mat); m.position.set(x, y, z); return m; };
+function signPlane(text, w, h, bg, fg) {
+  const c = document.createElement('canvas'); c.width = 256; c.height = Math.round(256 * h / w);
+  const g = c.getContext('2d');
+  g.fillStyle = bg; g.fillRect(0, 0, c.width, c.height);
+  g.fillStyle = fg; g.font = `bold ${Math.round(c.height * 0.55)}px "Courier New"`; g.textAlign = 'center'; g.textBaseline = 'middle';
+  g.fillText(text, c.width / 2, c.height / 2 + 2);
+  const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace;
+  return new THREE.Mesh(new THREE.PlaneGeometry(w, h), new THREE.MeshBasicMaterial({ map: t, fog: false, side: THREE.DoubleSide }));
+}
+
+export function buildFxMore(e, map, group, updaters) {
+  const FH = map.FH, y0 = (e.f || 0) * FH;
+  switch (e.k) {
+    case 'upside': {
+      // комната вверх дном: стол и стулья «стоят» на потолке
+      const top = y0 + FH, wood = lam(0x7a5a34), cloth = lam(0x8a2a2a);
+      const g = new THREE.Group();
+      g.add(boxM(2.0, 0.08, 1.2, wood, 0, -0.75, 0), boxM(0.08, 0.75, 0.08, wood, -0.9, -0.37, -0.5), boxM(0.08, 0.75, 0.08, wood, 0.9, -0.37, -0.5),
+        boxM(0.08, 0.75, 0.08, wood, -0.9, -0.37, 0.5), boxM(0.08, 0.75, 0.08, wood, 0.9, -0.37, 0.5));
+      for (const [x, z, r] of [[-1.5, 0, 0.3], [1.5, 0.2, 2.8], [0, 1.4, 1.5]]) {
+        const ch = new THREE.Group();
+        ch.add(boxM(0.5, 0.06, 0.5, cloth, 0, -0.45, 0), boxM(0.5, 0.55, 0.06, cloth, 0, -0.75, -0.22));
+        for (const [lx, lz] of [[-0.2, -0.2], [0.2, -0.2], [-0.2, 0.2], [0.2, 0.2]]) ch.add(boxM(0.04, 0.45, 0.04, wood, lx, -0.22, lz));
+        ch.position.set(x, 0, z); ch.rotation.y = r; g.add(ch);
+      }
+      const lampOff = cylM(0.2, 0.3, 0.3, lam(0xd8d0b0), 0.3, -0.95, 0); g.add(lampOff);
+      g.position.set(e.x, top - 0.01, e.z);
+      group.add(g);
+      break;
+    }
+    case 'endless': {
+      // бесконечный коридор: одинаковые двери по обе стороны каждые две клетки и свет в конце
+      const door = lam(0x6a5a34), frame = lam(0x4a3e22);
+      const zc = (e.z + 0.5) * T4;
+      for (let x = e.x0 + 1; x < e.x1; x += 2) {
+        for (const side of [-1, 1]) {
+          const z = zc + side * (T4 / 2 - 0.06);
+          group.add(boxM(1.0, 2.1, 0.06, door, (x + 0.5) * T4, y0 + 1.05, z), boxM(1.2, 0.1, 0.08, frame, (x + 0.5) * T4, y0 + 2.15, z));
+        }
+      }
+      const far = glowSprite(0xfff4c0, 6, 0.6); far.position.set((e.x1 + 0.5) * T4, y0 + 1.6, zc); group.add(far);
+      break;
+    }
+    case 'barrier': {
+      const g = new THREE.Group();
+      g.add(boxM(0.35, 1.1, 0.35, lam(0xd8c020), 0, 0.55, 0));
+      const arm = new THREE.Group(); arm.position.set(0, 1.0, 0);
+      for (let k = 0; k < 6; k++) arm.add(boxM(0.6, 0.1, 0.1, lam(k % 2 ? 0xffffff : 0xd02020), 0.35 + k * 0.6, 0, 0));
+      arm.rotation.z = 0.12;
+      g.add(arm); g.position.set(e.x, y0, e.z); g.rotation.y = e.rot || 0;
+      group.add(g);
+      break;
+    }
+    case 'rampsign': {
+      const s = signPlane(e.text, 2.2, 0.55, '#1a3a8a', '#ffffff'); s.position.set(e.x, y0 + FH - 0.6, e.z); group.add(s);
+      break;
+    }
+    case 'booth': {
+      const s = signPlane('ОХРАНА', 1.8, 0.45, '#202020', '#ffd040');
+      s.position.set((e.x0 + e.x1 + 1) / 2 * T4, y0 + FH - 0.5, (e.z1 + 1) * T4 + 0.06); group.add(s);
+      const l = new THREE.PointLight(0x80b0ff, 1.5, 10, 1.5); l.position.set((e.x0 + e.x1 + 1) / 2 * T4, y0 + 2.4, (e.z0 + e.z1 + 1) / 2 * T4); group.add(l);
+      break;
+    }
+    case 'steamgate': {
+      const red = new THREE.PointLight(0xff3020, 2.5, 10, 1.5); red.position.set(e.x - 3, y0 + 2.3, e.z); group.add(red);
+      const s = signPlane('ПАРОВОЙ ШЛЮЗ', 2.4, 0.4, '#3a1008', '#ffb040'); s.position.set(e.x - 2.1, y0 + 2.4, e.z); s.rotation.y = -Math.PI / 2; group.add(s);
+      updaters.push((dt, t) => { red.intensity = 1.5 + Math.sin(t * 4) * 1.2; });
+      break;
+    }
+    case 'shaft': {
+      // перила мостков над пропастью и тросы, уходящие вниз
+      const rail = lam(0xb0a080), zz = (e.z0 + 1) * T4, x0 = (e.x0 - 1) * T4, len = (e.x1 - e.x0 + 3) * T4, yb = 2 * FH;
+      for (const dz of [0.15, T4 - 0.15]) {
+        const r = cylM(0.04, 0.04, len, rail, x0 + len / 2, yb + 1.0, zz + dz, 6); r.rotation.z = Math.PI / 2; group.add(r);
+        for (let k = 0; k <= len; k += 2) group.add(cylM(0.03, 0.03, 1.0, rail, x0 + k, yb + 0.5, zz + dz, 5));
+      }
+      for (let k = 0; k < 4; k++) {
+        const c = cylM(0.02, 0.02, 3 * FH, lam(0x222222), (e.x0 + 0.5 + k * 0.7) * T4, 1.5 * FH, (e.z0 + 0.3) * T4, 4); group.add(c);
+      }
+      const warn = new THREE.PointLight(0xff4020, 1.6, 14, 1.5); warn.position.set((e.x0 + 1.5) * T4, 2 * FH + 2.4, (e.z0 + 1.5) * T4); group.add(warn);
+      break;
+    }
+    case 'boiler': {
+      const tank = cylM(1.1, 1.1, 2.4, lam(0x5a3a2a, 0x100602), e.x, y0 + 1.2, e.z, 16); group.add(tank);
+      const glow = glowSprite(0xff7020, 2.5, 0.5); glow.position.set(e.x, y0 + 0.6, e.z + 1.15); group.add(glow);
+      const l = new THREE.PointLight(0xff8040, 2.2, 9, 1.5); l.position.set(e.x, y0 + 1, e.z + 1.6); group.add(l);
+      updaters.push((dt, t) => { l.intensity = 1.8 + Math.sin(t * 7) * 0.4 + Math.random() * 0.2; });
+      break;
+    }
+    case 'stairwell': {
+      const s = signPlane('ЛЕСТНИЦА ↑', 1.8, 0.4, '#0a4a2a', '#d0ffe0'); s.position.set(e.x, FH - 0.5, e.z - 6); group.add(s);
+      const l = new THREE.PointLight(0x40ff90, 1.4, 10, 1.5); l.position.set(e.x, FH - 0.6, e.z - 4); group.add(l);
+      break;
+    }
+    case 'morgue': {
+      const steel = lam(0x9aa0a4);
+      for (let r = 0; r < 3; r++) for (let c = 0; c < 4; c++) {
+        group.add(boxM(0.9, 0.55, 0.05, steel, e.x - 1.6 + c * 1.05, y0 + 0.5 + r * 0.65, e.z - 3.7), boxM(0.2, 0.05, 0.08, lam(0x333333), e.x - 1.6 + c * 1.05, y0 + 0.62 + r * 0.65, e.z - 3.65));
+      }
+      group.add(boxM(0.9, 0.85, 2.0, steel, e.x + 1, y0 + 0.42, e.z));
+      break;
+    }
+    case 'surgery': {
+      const lampTop = cylM(0.7, 0.9, 0.25, lam(0xdfe4e0, 0x404040), e.x, y0 + FH - 0.6, e.z, 16); group.add(lampTop);
+      // без настоящего источника света (их число дорого обходится шейдерам) — светящийся диск и ореол
+      const disc = new THREE.Mesh(new THREE.CircleGeometry(0.6, 16), new THREE.MeshBasicMaterial({ color: 0xf0fff4 }));
+      disc.rotation.x = Math.PI / 2; disc.position.set(e.x, y0 + FH - 0.74, e.z);
+      const halo = glowSprite(0xe8fff0, 3, 0.5); halo.position.set(e.x, y0 + FH - 1.0, e.z);
+      group.add(disc, halo, boxM(0.9, 0.9, 2.1, lam(0x6a8a80), e.x, y0 + 0.45, e.z));
+      updaters.push(() => { halo.material.opacity = Math.random() < 0.03 ? 0.05 : 0.5; });
+      break;
+    }
+    case 'collapse': {
+      const debris = lam(0x7a7a70);
+      for (let k = 0; k < 14; k++) {
+        const m = boxM(0.3 + Math.random() * 0.5, 0.1 + Math.random() * 0.25, 0.3 + Math.random() * 0.5, debris,
+          (e.x0 + Math.random() * (e.x1 - e.x0 + 1)) * T4, Math.random() < 0.5 ? 0.1 : y0 + 0.1, (e.z + (Math.random() < 0.5 ? -0.3 : 1.3)) * T4);
+        m.rotation.set(Math.random(), Math.random() * 3, Math.random()); group.add(m);
+      }
+      break;
+    }
+    case 'glassroom': {
+      const s = signPlane('ПЕРЕГОВОРНАЯ', 2.4, 0.45, '#e8e8e8', '#1a3a6a');
+      s.position.set((e.x0 + 3.5) * T4, y0 + FH - 0.5, (e.z1 + 1) * T4 + 0.06); group.add(s);
+      break;
+    }
+    case 'serverroom': {
+      const l = new THREE.PointLight(0x4080ff, 2.2, 14, 1.5); l.position.set((e.x0 + e.x1 + 1) / 2 * T4, y0 + FH - 0.6, (e.z0 + e.z1 + 1) / 2 * T4); group.add(l);
+      updaters.push((dt, t) => { l.intensity = 1.8 + (Math.sin(t * 11) > 0.9 ? 0.8 : 0); });
+      break;
+    }
+    case 'hall': break; // великий зал: архитектура целиком в геометрии
+  }
 }

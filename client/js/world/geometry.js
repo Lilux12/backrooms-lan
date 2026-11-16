@@ -2,6 +2,7 @@
 // стены, плиты пола и потолка, края провалов, лестницы, бассейны, вода, лазы, вертикальные лестницы, лампы.
 import * as THREE from 'three';
 import { BR, N, TILE } from '../core/util.js';
+import { buildBlocks, rampGeo } from './blocks.js';
 
 const { T, NN, SLAB, VENT_H, LOW_H } = BR;
 const m4 = new THREE.Matrix4(), q = new THREE.Quaternion(), v = new THREE.Vector3(), sc = new THREE.Vector3();
@@ -123,8 +124,8 @@ export function buildLevelGeometry(map, mats, st, seed, panelMat) {
   const isExit = (f, i) => f === ex.f && i === ex.cell;
 
   const walls = [], floors = [], ceils = [], edges = [], stairs = [], ladders = [], fills = [], panels = [];
-  const poolFloors = [], poolSides = [], glass = [];
-  const flatTypes = new Set([T.FLOOR, T.LOW, T.LADDER, T.VENT]);
+  const poolFloors = [], poolSides = [], glass = [], blocks = [];
+  const flatTypes = new Set([T.FLOOR, T.LOW, T.LADDER, T.VENT, T.BLOCK]);
 
   for (let f = 0; f < F; f++) {
     const b = f * FH, L = map.t[f];
@@ -142,6 +143,14 @@ export function buildLevelGeometry(map, mats, st, seed, panelMat) {
         continue;
       }
       if (flatTypes.has(t)) floors.push(mtx(x, b, z));
+      if (t === T.BLOCK) {
+        // ориентация: вдоль соседнего такого же блока, иначе — по хэшу клетки
+        const h = ((cx * 73856093) ^ (cz * 19349663) ^ (f * 83492791)) >>> 0;
+        const alongX = (cx > 0 && L[i - 1] === T.BLOCK) || (cx < N - 1 && L[i + 1] === T.BLOCK);
+        const alongZ = (cz > 0 && L[i - N] === T.BLOCK) || (cz < N - 1 && L[i + N] === T.BLOCK);
+        const rot = alongX ? Math.PI / 2 : alongZ ? 0 : (h & 1 ? Math.PI / 2 : 0) + (h & 2 ? Math.PI : 0);
+        blocks.push({ x, y: b, z, aux: map.a[f][i], rot, seed: h });
+      }
       if (t === T.STAIR) {
         const d = BR.stairDir(map.a[f][i]), s = BR.stairSeg(map.a[f][i]);
         const rot = [Math.PI / 2, -Math.PI / 2, 0, Math.PI][d]; // +z геометрии → направление подъёма
@@ -202,7 +211,8 @@ export function buildLevelGeometry(map, mats, st, seed, panelMat) {
   add(instanced(face, wallMat, edges));
   add(instanced(face.clone(), floorMat, poolSides));
   add(instanced(new THREE.BoxGeometry(TILE, FH, TILE), wallMat, fills));
-  add(instanced(stairGeo(FH), floorMat, stairs));
+  add(instanced(st.ramp ? rampGeo(FH) : stairGeo(FH), floorMat, stairs));
+  for (const mesh of buildBlocks(blocks)) group.add(mesh);
   add(instanced(ladderGeo(FH + 1.1), new THREE.MeshLambertMaterial({ color: 0x8a8f94 }), ladders));
   // стеклянная крыша: мутное небо в переплёте рам
   if (glass.length) {

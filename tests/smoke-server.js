@@ -20,6 +20,12 @@ async function main() {
     for (const bad of ['/%2e%2e/package.json', '/%2e%2e/server/index.js', '/shared/%2e%2e/package.json', '/js/%2e%2e%2f%2e%2e/package.json']) {
       assert.strictEqual((await fetch(`http://localhost:${PORT}${bad}`)).status, 404, `выход за пределы папки: ${bad}`);
     }
+    // нулевой байт в пути раньше ронял сервер (fs бросал исключение синхронно)
+    for (const bad of ['/a%00.js', '/shared/%00core.js', '/js/%00/x.css']) {
+      const st = (await fetch(`http://localhost:${PORT}${bad}`)).status;
+      assert(st === 404 || st === 400, `странный ответ на ${bad}: ${st}`);
+    }
+    assert.strictEqual((await fetch(`http://localhost:${PORT}/`)).status, 200, 'сервер не отвечает после пути с нулевым байтом');
 
     const msgs = [];
     const ws = new WebSocket(`ws://localhost:${PORT}`);

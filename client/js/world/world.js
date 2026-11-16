@@ -87,9 +87,22 @@ function buildGeo() {
 }
 const LEVEL_STYLE = () => curStyle;
 
-// Сервер изменил клетку карты
+// Сервер изменил клетку карты (геометрию пересобираем не чаще раза в кадр)
+let geoPending = false;
 export function setCellLocal(f, i, type, aux) {
   if (!map) return;
   BR.setCell(map, f, i, type, aux);
-  buildGeo();
+  if (geoPending) return;
+  geoPending = true;
+  queueMicrotask(() => { geoPending = false; if (map) buildGeo(); });
+}
+
+// Сервер добавил препятствие (упавшая каталка)
+export function addObstacleNet(o) {
+  if (!map || !world) return;
+  map.obst = map.obst || [];
+  if (!map.obst.includes(o)) map.obst.push(o);
+  const mesh = addObstacle(o);
+  if (o.fell) mesh.rotation.z = 0.25;
+  world.add(mesh);
 }

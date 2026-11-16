@@ -106,7 +106,7 @@ function getDecalTex() {
 
 export function addObstacle(o) {
   const g = buildProp(o.kind);
-  g.position.set(o.x, 0, o.z); g.rotation.y = o.rot;
+  g.position.set(o.x, o.y || 0, o.z); g.rotation.y = o.rot;
   return g;
 }
 

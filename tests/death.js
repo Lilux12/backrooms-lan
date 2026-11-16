@@ -54,6 +54,17 @@ async function main() {
     const again = await A.wait((m) => m.t === 'init', 15000);
     assert.strictEqual(again.level, 1, 'после поражения запущен не тот уровень');
     assert(!again.dead.length, 'после рестарта кто-то остался мёртвым');
+    // текст о смерти для остальных — в третьем лице (раньше было «Борис погиб. Вы захлебнулись»)
+    await sleep(300);
+    B.send({ t: 'drown' });
+    const evd = await A.wait((m) => m.t === 'ev' && m.text.startsWith('Борис погиб') && m.text.includes('захлеб'));
+    assert(!/\b[Вв]ы\b|\b[Вв]ас\b/.test(evd.text), `текст о смерти обращается ко всем на «вы»: ${evd.text}`);
+    console.log(`  текст о смерти: «${evd.text}»`);
+    // последний живой уходит — призраки не остаются одни: поражение и рестарт уровня
+    A.close();
+    await B.wait((m) => m.t === 'defeat', 5000);
+    await B.wait((m) => m.t === 'init', 15000);
+    console.log('  последний живой вышел: поражение и рестарт');
     console.log('OK death: смерть, статистика для зрителей, метки призраков, аптечка, алтарь, поражение и рестарт');
   } finally { A.close(); B.close(); srv.proc.kill(); }
 }

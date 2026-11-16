@@ -37,6 +37,11 @@ function buildLevel(idx, seed, team, opts = {}) {
   // Порядок вызовов setup важен: он расходует общий rnd, а значит определяет расстановку
   for (const p of Object.keys(PUZZLES)) if (cfg.puzzles.includes(p)) PUZZLES[p].setup(G, add, rnd);
 
+  // Лифты: кабина на каждом этаже шахты, E — поехать на следующий этаж
+  (map.lifts || []).forEach((L, k) => {
+    for (const f of L.floors) add('lift', { x: BR.centerX(L.x + L.z * BR.N), y: f * map.FH, z: BR.centerZ(L.x + L.z * BR.N), f, shaft: k, d: L.d, broken: !!L.broken });
+  });
+
   const e = map.exit;
   G.door = add('door', { x: e.wx, y: e.y, z: e.wz, fx: e.fx, fz: e.fz, dx: e.dx, dz: e.dz, open: false });
 
@@ -76,7 +81,7 @@ function buildLevel(idx, seed, team, opts = {}) {
       BR.pickSpots(map, rnd, count, { minDist: 0.55 * maxD, minSep: 8 }).forEach((p) => G.mobs.push(newMob(map, p.x, p.y, p.z, 5, type)));
     }
   }
-  if (!cfg.puzzles.length) { G.doorOpen = true; BR.setDoor(map, true); G.door.open = true; } // уровни без головоломки
+  if (cfg.puzzles.every((p) => pz[p].solved)) { G.doorOpen = true; BR.setDoor(map, true); G.door.open = true; } // уровни без головоломки
   if (cfg.skinstealer) SS.createStealer(G);
   return G;
 }

@@ -7,7 +7,7 @@
 (function (root) {
   'use strict';
   const BR = (typeof module === 'object' && module.exports) ? require('./core.js') : root.BR;
-  const { TILE, N, NN, SLAB, D4, T, WALKABLE, VENT_H, LOW_H, cellX, cellZ, inside, centerX, centerZ } = BR;
+  const { TILE, N, NN, SLAB, D4, T, WALKABLE, VENT_H, LOW_H, BLOCK_H, cellX, cellZ, inside, centerX, centerZ } = BR;
 
   /* ------------------------------ Карта ------------------------------ */
   // Пустая карта: все клетки всех этажей — стены
@@ -61,6 +61,7 @@
         }
         case T.VENT: out.push(box(under, b), box(b + VENT_H, b + FH)); break;
         case T.LOW: out.push(box(under, b), box(b + LOW_H, b + FH)); break;
+        case T.BLOCK: out.push(box(under, b + BLOCK_H)); break;
         default: out.push(box(under, b)); // FLOOR, LADDER
       }
     }
@@ -373,9 +374,16 @@
     if (!map.navDirty && map.nav) return map.nav;
     map.nav = buildNav(map);
     map.navMob = buildNav(map, { vent: false, water: false });
+    map.navCrawl = null; // граф «ползунов» (через лазы) строится по требованию
     map.navDirty = false;
     map.navStamp = (map.navStamp || 0) + 1; // существа узнают, что граф изменился
     return map.nav;
+  }
+  // Граф для существ, которые пролезают в вентиляцию (без глубокой воды)
+  function navCrawl(map) {
+    ensureNav(map);
+    if (!map.navCrawl) map.navCrawl = buildNav(map, { vent: true, water: false });
+    return map.navCrawl;
   }
 
   // BFS: расстояния (в рёбрах) от узла start по рёбрам out (или к узлу start по inn при reverse)
@@ -447,7 +455,7 @@
 
   Object.assign(BR, {
     newMap, buildColumn, buildColumns, setCell, solidAt, waterAt, waterDepth, PHYS, blocked, groundAt, floorOf, nodeAt,
-    ladderAt, makeBody, moveBody, buildNav, ensureNav, bfsNav, nodePos, los3, steerInput, mapHash,
+    ladderAt, makeBody, moveBody, buildNav, ensureNav, navCrawl, bfsNav, nodePos, los3, steerInput, mapHash,
     stairDir, stairSeg, floorY, opp,
   });
   if (typeof module === 'object' && module.exports) module.exports = BR;

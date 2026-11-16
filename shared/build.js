@@ -324,7 +324,7 @@
           for (let p = c; p >= 0 && prev[p] !== -1; p = prev[p]) if (L[p] === T.WALL) L[p] = T.FLOOR;
           return true;
         }
-        if (L[j] !== T.WALL) continue;
+        if (L[j] !== T.WALL || reserved(map, j)) continue; // «знаковую» архитектуру (шлюзы, отсеки) не трогаем
         prev[j] = c; q.push(j);
       }
     }
@@ -337,7 +337,7 @@
     const L = map.t[f], U = map.t[f + 1];
     for (const preferWall of [true, false]) {
       for (let i = 0; i < NN; i++) {
-        if (L[i] !== T.FLOOR || !(reach[f * NN + i] >= 0 && back[f * NN + i] < 0)) continue;
+        if (L[i] !== T.FLOOR || !(reach[f * NN + i] >= 0 && back[f * NN + i] < 0) || reserved(map, i)) continue;
         if (preferWall ? U[i] !== T.WALL : !(U[i] === T.WALL || U[i] === T.FLOOR)) continue;
         for (let d = 0; d < 4; d++) {
           const w = step(i, d);
@@ -355,7 +355,7 @@
     const L = map.t[f - 1], U = map.t[f];
     for (const strict of [true, false]) {
       for (let i = 0; i < NN; i++) {
-        if (L[i] !== T.FLOOR || reach[(f - 1) * NN + i] < 0) continue;
+        if (L[i] !== T.FLOOR || reach[(f - 1) * NN + i] < 0 || (strict && reserved(map, i))) continue;
         if (!(U[i] === T.WALL || U[i] === T.FLOOR)) continue;
         for (let d = 0; d < 4; d++) {
           const w = step(i, d);
@@ -382,7 +382,7 @@
           if (map.t[f][i] !== T.HOLE) continue;
           let g = f - 1;
           while (g > 0 && map.t[g][i] === T.HOLE) g--;
-          if (map.t[g][i] === T.WALL) map.t[f][i] = T.FLOOR; // над стеной провала не бывает
+          if (map.t[g][i] === T.WALL || map.t[g][i] === T.BLOCK) map.t[f][i] = T.FLOOR; // над стеной и препятствием провала не бывает
         }
       }
       const sf = Math.floor(spawnNode / NN), si = spawnNode % NN;
@@ -443,7 +443,130 @@
     return { reach, back };
   }
 
+  /* ------------------- Фиксированная архитектура («знаковые места») ------------------- */
+  const reserveCell = (map, i) => { (map.reserved || (map.reserved = new Set())).add(i); };
+
+  // Прямоугольник клеток этажа f одного типа (x0..x1, z0..z1 включительно, только внутренние клетки)
+  function fillRect(map, f, x0, z0, x1, z1, type, aux = 0, reserve = false) {
+    for (let z = z0; z <= z1; z++) for (let x = x0; x <= x1; x++) {
+      if (!inner(x, z)) continue;
+      const i = idx(x, z);
+      map.t[f][i] = type; map.a[f][i] = aux;
+      if (reserve) reserveCell(map, i);
+    }
+  }
+  function reserveRect(map, x0, z0, x1, z1) {
+    for (let z = z0; z <= z1; z++) for (let x = x0; x <= x1; x++) if (inner(x, z)) reserveCell(map, idx(x, z));
+  }
+  // Комната: стены по периметру, пол внутри; двери — список [x, z] клеток периметра
+  function room(map, f, x0, z0, x1, z1, doors = [], reserve = true) {
+    fillRect(map, f, x0, z0, x1, z1, T.WALL, 0, reserve);
+    fillRect(map, f, x0 + 1, z0 + 1, x1 - 1, z1 - 1, T.FLOOR);
+    for (const [x, z] of doors) { map.t[f][idx(x, z)] = T.FLOOR; carveConnect(map, f, idx(x, z), roomCells(x0, z0, x1, z1)); }
+  }
+  const roomCells = (x0, z0, x1, z1) => { const s = new Set(); for (let z = z0; z <= z1; z++) for (let x = x0; x <= x1; x++) s.add(idx(x, z)); return s; };
+
+  // Лестница в заданном месте: подъём с клетки (x, z) в направлении d; 2 клетки ската + площадка наверху
+  function placeStair(map, f, x, z, d, used = []) {
+    const c0 = idx(x, z), c1 = step(c0, d), c2 = step(c0, d, 2), cb = step(c0, d ^ 1);
+    if ([c0, c1, c2, cb].some((c) => c < 0) || f + 1 >= map.F) return false;
+    const L = map.t[f], U = map.t[f + 1];
+    L[c0] = T.STAIR; map.a[f][c0] = d;
+    L[c1] = T.STAIR; map.a[f][c1] = d | 4;
+    U[c0] = T.HOLE; U[c1] = T.HOLE;
+    if (!isFlat(U[c2])) U[c2] = T.FLOOR;
+    if (!isFlat(L[cb])) L[cb] = T.FLOOR;
+    carveConnect(map, f, cb, new Set([c0, c1]));
+    carveConnect(map, f + 1, c2, new Set([c0, c1]));
+    for (const c of [c0, c1, c2, cb]) reserveCell(map, c);
+    used.push(c0, c1);
+    return true;
+  }
+
+  // Вертикальная лестница в клетке (x, z) этажа f у стены в направлении d; наверху — площадка
+  function placeLadder(map, f, x, z, d, used = []) {
+    const c = idx(x, z), w = step(c, d), back = step(c, d ^ 1);
+    if (c < 0 || w < 0 || back < 0 || f + 1 >= map.F) return false;
+    const L = map.t[f], U = map.t[f + 1];
+    L[c] = T.LADDER; map.a[f][c] = d;
+    L[w] = T.WALL;
+    if (!isFlat(L[back])) L[back] = T.FLOOR;
+    U[c] = T.HOLE;
+    if (!isFlat(U[w])) U[w] = T.FLOOR;
+    carveConnect(map, f, back, new Set([c, w]));
+    carveConnect(map, f + 1, w, new Set([c]));
+    for (const k of [c, w, back]) reserveCell(map, k);
+    used.push(c);
+    return true;
+  }
+
+  // Низкие препятствия (машины, столы, кровати): ряды по len клеток вдоль оси.
+  // Ставятся только туда, где вокруг ряда сплошной пол — поэтому они никогда не перекрывают проход.
+  function addBlocks(map, rnd, f, count, o = {}) {
+    const L = map.t[f], lenMin = o.min || 1, lenMax = o.max || 2, aux = o.aux || 0;
+    let n = 0;
+    for (let k = 0; k < count * 40 && n < count; k++) {
+      const len = lenMin + Math.floor(rnd() * (lenMax - lenMin + 1));
+      const horiz = rnd() < 0.5, x0 = 1 + Math.floor(rnd() * (N - 2)), z0 = 1 + Math.floor(rnd() * (N - 2));
+      const x1 = horiz ? x0 + len - 1 : x0, z1 = horiz ? z0 : z0 + len - 1;
+      if (o.area && !(x0 >= o.area[0] && z0 >= o.area[1] && x1 <= o.area[2] && z1 <= o.area[3])) continue;
+      let ok = true;
+      for (let z = z0 - 1; z <= z1 + 1 && ok; z++) for (let x = x0 - 1; x <= x1 + 1; x++) {
+        if (!inner(x, z)) { ok = false; break; }
+        const i = idx(x, z);
+        if (L[i] !== T.FLOOR || reserved(map, i) || map.wz[i] >= 0 && !o.water) { ok = false; break; }
+        if (f + 1 < map.F && map.t[f + 1][i] === T.HOLE) { ok = false; break; }
+      }
+      if (!ok) continue;
+      for (let z = z0; z <= z1; z++) for (let x = x0; x <= x1; x++) { L[idx(x, z)] = T.BLOCK; map.a[f][idx(x, z)] = aux; }
+      n++;
+    }
+    return n;
+  }
+
+  // Лифт: кабина в одной и той же клетке на этажах floors (клетка — пол в нише). Связь — объект 'lift' на сервере.
+  function addLift(map, x, z, floors, d = 0) {
+    const c = idx(x, z), back = step(c, d);
+    for (const f of floors) {
+      map.t[f][c] = T.FLOOR; reserveCell(map, c);
+      if (back >= 0 && !isFlat(map.t[f][back])) map.t[f][back] = T.FLOOR;
+      if (back >= 0) carveConnect(map, f, back, new Set([c]));
+    }
+    (map.lifts || (map.lifts = [])).push({ x, z, floors, d });
+  }
+
+  // Лестничная клетка с этажа f0 до f1: марши зигзагом в колонках x и x+1 (2 клетки на этаж),
+  // площадки в рядах z-1 и z+2, вдоль клетки — коридор в колонке x-2 (колонка x-1 — стена-перила).
+  // Занимает x-2..x+1, z-1..z+2; выход — из коридора на север (x-2, z-2), дальше carveConnect.
+  function stairwell(map, x, z, f0, f1) {
+    for (let f = f0; f <= f1; f++) {
+      fillRect(map, f, x - 3, z - 2, x + 2, z + 3, T.WALL, 0, true);
+      fillRect(map, f, x - 2, z - 1, x - 2, z + 2, T.FLOOR);           // коридор вдоль клетки
+      const k = f - f0, even = k % 2 === 0;
+      const hasUp = f < f1, cameUp = f > f0;
+      // площадки: на чётных этажах — ряд z-1, на нечётных — ряд z+2
+      const row = even ? z - 1 : z + 2;
+      fillRect(map, f, x - 1, row, x + 1, row, T.FLOOR);
+      if (cameUp) { // проём над маршем снизу
+        const px = even ? x + 1 : x;
+        map.t[f][idx(px, z)] = T.HOLE; map.t[f][idx(px, z + 1)] = T.HOLE;
+      }
+      if (hasUp) {
+        const sx = even ? x : x + 1, d = even ? 2 : 3;
+        const c0 = even ? idx(sx, z) : idx(sx, z + 1), c1 = even ? idx(sx, z + 1) : idx(sx, z);
+        map.t[f][c0] = T.STAIR; map.a[f][c0] = d;
+        map.t[f][c1] = T.STAIR; map.a[f][c1] = d | 4;
+      }
+    }
+    for (let f = f0; f <= f1; f++) {
+      map.t[f][idx(x - 2, z - 2)] = T.FLOOR;
+      carveConnect(map, f, idx(x - 2, z - 3), roomCells(x - 3, z - 2, x + 2, z + 3));
+      map.t[f][idx(x - 2, z - 3)] = map.t[f][idx(x - 2, z - 3)] === T.WALL ? T.FLOOR : map.t[f][idx(x - 2, z - 3)];
+    }
+  }
+
   Object.assign(BR, {
+    stairwell, fillRect, reserveRect, room, placeStair, placeLadder, addBlocks, addLift, reserveCell,
     layerFromGrid, carveConnect, addStairs, addLadders, addHoles, addAtrium, addPools, addFlood, addWaterZone,
     addVents, addLow, fixStairs, finalize, isFlat, cellStep: step, connectFloor,
   });
