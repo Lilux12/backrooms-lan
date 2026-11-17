@@ -178,12 +178,14 @@ npm test
 - Цель «60 FPS на встроенной видеокарте» проверена только расчётом нагрузки (instancing, бюджет источников света,
   динамическое разрешение): автотесты рисуют программно (SwiftShader), реальный FPS смотрите по F3.
 
-## Скриншоты для README
+## Картинки для README
 
-Картинки в `docs/screenshots/` сняты тестом `tests/shots.js` (headless Chromium, программный рендер SwiftShader):
+Всё в `docs/media/` снято в headless Chromium (программный рендер SwiftShader, пресет «Высокое»):
+карточки уровней и кадры GIF — с телепортом камеры к знаковому месту уровня, как в тесте `tests/shots.js`:
 
 ```
 SHOT_DIR=./shots KINDS=landmark,atrium,pool,hole node tests/shots.js
 ```
 
-Потом их нужно уменьшить, например `magick shot.png -resize 640x -quality 80 shot.jpg`.
+Потом кадры уменьшаются ImageMagick, например `magick shot.png -resize 480x -quality 80 levels/3.jpg`.
+GIF: `magick -delay 8 -loop 0 кадры/*.jpg -resize 720x -layers Optimize tour.gif`.
