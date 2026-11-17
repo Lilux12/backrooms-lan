@@ -67,26 +67,53 @@
 
 <div id="menu">
   <div id="menuBg"></div>
-  <div class="wrap">
-    <h1>BACKROOMS</h1>
-    <div class="sub" id="subtitle">ПОБЕГ ИЗ ЗАКУЛИСЬЯ · КООП ПО СЕТИ</div>
-    <div class="grid">
-      <div>
-        <div class="card">
-          <h4>ВХОД</h4>
+  <div class="mm">
+    <nav class="mm-nav" id="mmNav">
+      <h1>BACKROOMS</h1>
+      <div class="sub" id="subtitle">ПОБЕГ ИЗ ЗАКУЛИСЬЯ · КООП ПО СЕТИ</div>
+      <button data-scr="play" class="on" id="navPlay">ИГРАТЬ</button>
+      <button data-scr="levels">ЭТАПЫ</button>
+      <button data-scr="settings">НАСТРОЙКИ</button>
+      <button data-scr="controls">УПРАВЛЕНИЕ</button>
+      <button data-scr="records">РЕКОРДЫ</button>
+      <button data-scr="achs">ДОСТИЖЕНИЯ</button>
+      <button data-scr="friends">ПОЗВАТЬ ДРУГА</button>
+    </nav>
+    <section class="mm-panel">
+      <div class="card scr on" data-scr="play">
+        <h4 id="playTitle">НОВАЯ ИГРА</h4>
+        <div id="lobbyBox">
           <input type="text" id="name" maxlength="16" placeholder="Ваш ник" autocomplete="off">
           <div class="lobby">
             <label>Роль <select id="role"><option value="">без роли</option><option value="scout">Разведчик: быстрее, миникарта шире</option><option value="mechanic">Механик: переключатели держатся дольше</option><option value="medic">Медик: аптечка на каждом уровне</option></select></label>
             <label>Цвет <input type="color" id="color" value="#6aa0ff"></label>
           </div>
-          <button id="play">ИГРАТЬ</button>
-          <div id="status"></div>
-          <button id="stuck" class="small" style="display:none">Я застрял — вернуться к началу уровня</button>
-          <div id="lan">Друг заходит в браузере по адресу<br><b id="addr"></b></div>
         </div>
-        <div class="card" style="margin-top:16px">
-          <h4>УПРАВЛЕНИЕ</h4>
-          <div class="keys">
+        <button id="play">ВОЙТИ В ЗАКУЛИСЬЕ</button>
+        <div id="status"></div>
+        <button id="stuck" class="small" style="display:none">Я застрял — вернуться к началу уровня</button>
+        <div class="hint" id="playHint">Найдите выход. Не отставайте от своих. Не верьте тем, кто ведёт себя странно.</div>
+      </div>
+      <div class="card scr" data-scr="levels">
+        <h4>ЭТАПЫ</h4>
+        <div class="lvls" id="lvlList"></div>
+      </div>
+      <div class="card scr" data-scr="settings">
+        <h4>НАСТРОЙКИ</h4>
+        <div class="set">
+            <label for="sSens">Мышь</label><input type="range" id="sSens" min="0.4" max="2.5" step="0.05"><output id="oSens"></output>
+            <label for="sFov">Угол обзора</label><input type="range" id="sFov" min="60" max="100" step="1"><output id="oFov"></output>
+            <label for="sVol">Громкость</label><input type="range" id="sVol" min="0" max="1" step="0.05"><output id="oVol"></output>
+            <label for="sBr">Яркость</label><input type="range" id="sBr" min="0.7" max="1.8" step="0.05"><output id="oBr"></output>
+            <label for="sPreset">Качество</label><select id="sPreset"><option value="low">Низкое</option><option value="medium">Среднее</option><option value="high">Высокое</option><option value="ultra">Ультра</option></select><span></span>
+          </div>
+          <div class="checks" id="checks"></div>
+          <h4 style="margin-top:14px">КЛАВИШИ <small>(клик — назначить)</small></h4>
+          <div class="binds" id="binds"></div>
+      </div>
+      <div class="card scr" data-scr="controls">
+        <h4>УПРАВЛЕНИЕ</h4>
+        <div class="keys">
             <span><kbd>W A S D</kbd></span><span>идти</span>
             <span><kbd>Shift</kbd></span><span>бежать (тратит силы)</span>
             <span><kbd>Пробел</kbd></span><span>прыжок; в воде — всплыть; на лестнице — вверх</span>
@@ -109,36 +136,24 @@
             <span>🎮</span><span>геймпад: стики — ход и взгляд, A — прыжок, B — присесть, X — действие, Y — фонарь, RB — бег</span>
             <span><kbd>Esc</kbd></span><span>пауза (игра идёт дальше)</span>
           </div>
-        </div>
       </div>
-      <div>
-        <div class="card">
-          <h4>ЭТАПЫ</h4>
-          <div class="lvls" id="lvlList"></div>
-        </div>
-        <div class="card" style="margin-top:16px">
-          <h4>РЕКОРДЫ СЕРВЕРА</h4>
-          <div class="records" id="records">загрузка…</div>
-        </div>
-        <div class="card" style="margin-top:16px">
-          <h4>ДОСТИЖЕНИЯ</h4>
-          <div class="achs" id="achList"></div>
-        </div>
-        <div class="card" style="margin-top:16px">
-          <h4>НАСТРОЙКИ</h4>
-          <div class="set">
-            <label for="sSens">Мышь</label><input type="range" id="sSens" min="0.4" max="2.5" step="0.05"><output id="oSens"></output>
-            <label for="sFov">Угол обзора</label><input type="range" id="sFov" min="60" max="100" step="1"><output id="oFov"></output>
-            <label for="sVol">Громкость</label><input type="range" id="sVol" min="0" max="1" step="0.05"><output id="oVol"></output>
-            <label for="sBr">Яркость</label><input type="range" id="sBr" min="0.7" max="1.8" step="0.05"><output id="oBr"></output>
-            <label for="sPreset">Качество</label><select id="sPreset"><option value="low">Низкое</option><option value="medium">Среднее</option><option value="high">Высокое</option><option value="ultra">Ультра</option></select><span></span>
-          </div>
-          <div class="checks" id="checks"></div>
-          <h4 style="margin-top:14px">КЛАВИШИ <small>(клик — назначить)</small></h4>
-          <div class="binds" id="binds"></div>
-        </div>
+      <div class="card scr" data-scr="records">
+        <h4>РЕКОРДЫ СЕРВЕРА</h4>
+        <div class="records" id="records">загрузка…</div>
       </div>
-    </div>
+      <div class="card scr" data-scr="achs">
+        <h4>ДОСТИЖЕНИЯ</h4>
+        <div class="achs" id="achList"></div>
+      </div>
+      <div class="card scr" data-scr="friends">
+        <h4>ПОЗВАТЬ ДРУГА</h4>
+        <ol class="steps">
+          <li>Друг должен быть в той же сети: один роутер или Wi-Fi.</li>
+          <li>Отправьте ему адрес — он открывает его в браузере, ничего ставить не нужно:<div id="lan"><b id="addr"></b></div></li>
+          <li>Не подключается? При первом запуске Windows спрашивает про брандмауэр — разрешите Node.js доступ в частных сетях.</li>
+        </ol>
+      </div>
+    </section>
   </div>
 </div>
 

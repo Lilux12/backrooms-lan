@@ -121,7 +121,7 @@ cd backrooms-lan
 <td width="50%"><img src="docs/media/hud.jpg" alt="Интерфейс в игре"></td>
 </tr>
 <tr>
-<td align="center"><sub>Меню: роль, цвет, этапы, рекорды</sub></td>
+<td align="center"><sub>Главное меню: игра, этапы, настройки, рекорды</sub></td>
 <td align="center"><sub>В игре: цели, миникарта, выносливость, фонарь, шумомер</sub></td>
 </tr>
 </table>

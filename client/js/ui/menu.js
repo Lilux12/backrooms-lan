@@ -13,7 +13,7 @@ import { closeBigMap } from './maps.js';
 const nameInput = $('name');
 nameInput.value = localStorage.getItem('br_name') || `Игрок${Math.floor(rand(10, 99))}`;
 
-export function beginPlay() { S.started = true; $('menu').style.display = 'none'; $('hud').style.display = 'block'; }
+export function beginPlay() { S.started = true; setStatus(''); $('menu').style.display = 'none'; $('hud').style.display = 'block'; }
 function lockPointer() { renderer.domElement.requestPointerLock(); }
 
 $('play').addEventListener('click', () => {
@@ -32,12 +32,26 @@ document.addEventListener('pointerlockchange', () => {
   if (!S.locked && !S.ghostCursor) closeBigMap();
   if (social.chatOpen || social.asked || S.ghostCursor || S.adminOpen) return; // курсор нужен для чата/карты/панели — это не пауза
   if (S.started && S.joined && !S.locked) {
-    $('subtitle').textContent = 'ПАУЗА · КЛИК, ЧТОБЫ ПРОДОЛЖИТЬ (существо не ждёт!)';
+    $('subtitle').textContent = 'ПАУЗА · СУЩЕСТВО НЕ ЖДЁТ';
+    $('playTitle').textContent = 'ПАУЗА';
+    $('lobbyBox').style.display = 'none';
+    $('playHint').textContent = 'Игра для остальных продолжается.';
     $('play').textContent = 'ПРОДОЛЖИТЬ';
+    $('navPlay').textContent = 'ПРОДОЛЖИТЬ';
+    $('navPlay').classList.add('primary');
     $('stuck').style.display = 'block';
+    showScreen('play');
     $('menu').style.display = 'flex';
   }
 });
+
+// Пункты меню слева: показать раздел справа. «Продолжить» в паузе сразу возвращает в игру.
+function showScreen(name) {
+  for (const el of document.querySelectorAll('#menu [data-scr]')) el.classList.toggle('on', el.dataset.scr === name);
+}
+for (const b of document.querySelectorAll('#mmNav button')) {
+  b.addEventListener('click', () => { if (b.id === 'navPlay' && S.started) $('play').click(); else showScreen(b.dataset.scr); });
+}
 document.addEventListener('mousemove', (e) => {
   if (!S.locked) return;
   me.yaw -= e.movementX * 0.0022 * settings.sens;
