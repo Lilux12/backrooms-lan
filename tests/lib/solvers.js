@@ -176,6 +176,88 @@ const SOLVERS = {
     await api.use(gen, (m) => m.t === 'ev' && /завёл генератор/.test(m.text));
   },
 
+  // Лаборатория: допуск → считыватель (×3), рецепт → реагенты, два ключа сброса
+  async lab(api) {
+    for (const c of ['blue', 'yellow', 'red']) {
+      const card = api.of('labcard').find((o) => o.group === c);
+      await api.goTo(card.x, card.y, card.z);
+      await api.waitFor((m) => m.t === 'pick' && m.kind === 'labcard', 3000);
+      if (c === 'red') await api.waitFor((m) => m.t === 'ev' && /Карантин снят/.test(m.text), 15000);
+      const rd = api.of('cardreader').find((o) => o.group === c);
+      await api.goTo(rd.x + 0.5, rd.y, rd.z);
+      await api.use(rd, (m) => m.t === 'ev' && new RegExp(`открыл .* шлюз`).test(m.text));
+      if (c === 'yellow') {
+        const jn = api.of('paper').find((o) => /Журнал/.test(o.title || ''));
+        await api.goTo(jn.x, jn.y, jn.z);
+        api.recipe = (await api.use(jn, (m) => m.t === 'note')).text;
+      }
+    }
+    const names = ['СИНИЙ', 'ЗЕЛЁНЫЙ', 'ЯНТАРНЫЙ'];
+    const order = api.recipe.split('\n').filter((l) => /^\d\)/.test(l)).map((l) => names.findIndex((n) => l.includes(n)));
+    for (const col of order) {
+      const r = api.of('reagent').find((o) => o.col === col);
+      await api.goTo(r.x + 0.5, r.y, r.z);
+      await api.use(r, (m) => m.t === 'ev' && /добавил реагент/.test(m.text));
+    }
+    await api.waitFor((m) => m.t === 'ev' && /Охладитель готов/.test(m.text), 3000);
+    const [a, b] = api.switches('reactorkey');
+    await api.goTo(a.x, a.y, a.z);
+    await api.goTo(b.x, b.y, b.z);
+    await api.waitFor((m) => m.t === 'ev' && /АВАРИЙНЫЙ СБРОС/.test(m.text), 5000);
+  },
+
+  // Школа: 6 кусочков → доска; считалочка → игрушки на полки; две качели разом
+  async school(api) {
+    for (const p of api.of('puzzlepiece')) { await api.goTo(p.x, p.y, p.z); }
+    const board = api.of('puzzleboard')[0];
+    await api.goTo(board.x + 0.6, board.y, board.z);
+    await api.use(board, (m) => m.t === 'ev' && /Картина сложилась/.test(m.text));
+    const rh = api.of('paper').find((o) => /Считалочка/.test(o.title || ''));
+    await api.goTo(rh.x, rh.y, rh.z);
+    const text = (await api.use(rh, (m) => m.t === 'note')).text;
+    const toyOf = { bear: 'Мишка', bunny: 'Зайка', duck: 'Утёнок' }, colorOf = { 'пожарной': 'red', 'травы': 'green', 'неба': 'blue' };
+    for (const toy of api.of('toy')) {
+      const line = text.split('\n').find((l) => l.startsWith(toyOf[toy.toy]));
+      const color = Object.entries(colorOf).find(([w]) => line.includes(w))[1];
+      await api.goTo(toy.x, toy.y, toy.z);
+      await api.waitFor((m) => m.t === 'pick' && m.kind === 'toy', 3000);
+      const shelf = api.of('shelf').find((o) => o.color === color);
+      await api.goTo(shelf.x + 0.6, shelf.y, shelf.z);
+      await api.use(shelf, (m) => m.t === 'obj' && m.id === shelf.id);
+    }
+    await api.waitFor((m) => m.t === 'ev' && /Игрушки на своих местах/.test(m.text), 3000);
+    const [a, b] = api.switches('swing');
+    await api.goTo(a.x, a.y, a.z);
+    await api.goTo(b.x, b.y, b.z);
+    await api.waitFor((m) => m.t === 'ev' && /Качели взлетели/.test(m.text), 5000);
+  },
+
+  // Фабрика: печи по возрастанию → задвижки по схеме → конвейеры → три консоли
+  async factory(api, cfg, o = {}) {
+    for (const f of api.of('furnace').sort((a, b) => a.temp - b.temp)) {
+      await api.goTo(f.x, f.y, f.z);
+      await api.use(f, (m) => m.t === 'ev' && /разжёг печь/.test(m.text));
+    }
+    const sc = api.of('paper').find((q) => /Схема/.test(q.title || ''));
+    await api.goTo(sc.x, sc.y, sc.z);
+    const line = (await api.use(sc, (m) => m.t === 'note')).text.split('\n').find((l) => /[◄▲►]/.test(l) && !/—/.test(l));
+    const target = line.trim().split(/\s+/).map((ch) => ['◄', '▲', '►'].indexOf(ch));
+    for (const v of api.of('pipevalve').sort((a, b) => a.k - b.k)) {
+      await api.goTo(v.x + 0.5, v.y, v.z);
+      while (v.val !== target[v.k]) await api.use(v, (m) => m.t === 'obj' && m.id === v.id);
+    }
+    await api.waitFor((m) => m.t === 'ev' && /Конвейеры ожили/.test(m.text), 3000);
+    for (const s of api.switches('conveyor')) await api.goTo(s.x, s.y, s.z);
+    await api.waitFor((m) => m.t === 'ev' && /Конвейеры идут в такт/.test(m.text), 5000);
+    for (const s of api.switches('console')) await api.goTo(s.x, s.y, s.z);
+    await api.waitFor((m) => m.t === 'ev' && /ФАБРИКА ОСТАНОВЛЕНА/.test(m.text), 5000);
+    if (o.stay) { // вторая концовка: сесть в кресло Надсмотрщика
+      const ch = api.of('ending')[0];
+      await api.goTo(ch.x + 0.6, ch.y, ch.z);
+      await api.use(ch);
+    }
+  },
+
   // Механика уровня без отдельной цели
   async parking() {},
   async hospital() {},

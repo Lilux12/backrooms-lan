@@ -34,6 +34,7 @@ function cycle(dir) {
 
 /* ---------------------------- Сообщения ---------------------------- */
 export function onSpectatorNet(m) {
+  if (m.t === 'dead') S.myDeaths = (S.myDeaths || 0) + 1;
   switch (m.t) {
     case 'dead':
       spec.dead = true; spec.free = false;

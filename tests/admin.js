@@ -87,7 +87,7 @@ async function main() {
     // 5) лимит частоты
     for (let k = 0; k < 30; k++) H.send({ t: 'adm', cmd: 'light', args: { v: 1 } });
     await sleep(500);
-    assert(H.inbox.some((m) => m.t === 'adm' && m.error === 'Слишком часто'), 'нет лимита частоты');
+    assert(H.inbox.some((m) => m.t === 'adm' && m.error === 'Слишком часто'), 'нет лимита частоты\n' + srv.log().split('\n').slice(-15).join('\n'));
     console.log('  лимит частоты: работает');
     await sleep(1200); H.inbox.length = 0;
 

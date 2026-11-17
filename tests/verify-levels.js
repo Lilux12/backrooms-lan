@@ -94,6 +94,18 @@ function verifyLevel(lv, BRB) {
         }
         for (const k of st.need) assert(G.objs.some((o) => o.kind === k || `${o.kind}:${o.group}` === k), `${tag}, шаг «${st.name}»: нет объекта ${k}`);
         if (st.exit) assert(r[G.map.exit.frontNode] >= 0, `${tag}: выход недостижим`);
+        // за шлюзами тоже лестницы и стремянки: на последнем шаге проверяем физикой особые рёбра (первые seed)
+        if (st.exit && s < 6) {
+          for (let n = 0; n < nv.total; n++) {
+            if (r[n] < 0 || !nv.out[n] || reach[n] >= 0) continue; // то, что было доступно сразу, проверено ниже
+            for (const m of nv.out[n]) {
+              const kind = edgeKind(G.map, n, m);
+              if (kind === 'flat' || kind === 'pool') continue;
+              stats.edges[kind + '*'] = (stats.edges[kind + '*'] || 0) + 1;
+              if (!simulateEdge(G.map, n, m)) assert.fail(`${tag}, шаг «${st.name}»: физика не проходит ребро ${kind} ${n} → ${m}`);
+            }
+          }
+        }
         // головоломку нельзя обойти: на этом шаге до двери выхода (даже открытой) добраться нельзя
         if (st.noExit) assert(r[G.map.exit.frontNode] < 0, `${tag}, шаг «${st.name}»: выход достижим в обход головоломки`);
       }

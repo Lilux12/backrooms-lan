@@ -178,3 +178,56 @@ button.small:hover { border-color: var(--y); }
 #aConsole input { width: 100%; }
 #aResult { padding: 4px 14px 10px; min-height: 18px; }
 #aResult.ok { color: var(--ok); } #aResult.bad { color: var(--bad); }
+
+/* обратный отсчёт (реактор), газ, карантин */
+#countdown { position: absolute; top: 64px; left: 0; right: 0; text-align: center; font-size: 46px; letter-spacing: 6px; color: #ff4030; text-shadow: 0 0 18px rgba(255,40,20,.7), 0 0 3px #000; display: none; }
+#countdown.on { display: block; animation: cdpulse 1s infinite; }
+@keyframes cdpulse { 50% { opacity: .55; } }
+#gasfx { background: radial-gradient(ellipse at center, rgba(120,200,60,.15), rgba(80,160,30,.55)); opacity: 0; transition: opacity 1.2s; }
+#gasfx.on { opacity: 1; }
+#game.quarantine { filter: saturate(1.4) hue-rotate(-20deg) brightness(.9); }
+#game.drawings { filter: hue-rotate(35deg) saturate(1.6); }
+#banner .endstats { display: block; margin-top: 14px; font-size: 15px; opacity: .8; letter-spacing: 1px; }
+
+/* F3: отладочный оверлей; субтитры */
+#perf { position: fixed; top: 8px; right: 8px; z-index: 40; display: none; white-space: pre; font: 12px/1.45 "Courier New", monospace; color: #9f9; background: rgba(0,0,0,.6); padding: 6px 9px; border-radius: 4px; pointer-events: none; }
+#subs { position: fixed; bottom: 150px; left: 0; right: 0; text-align: center; z-index: 30; pointer-events: none; font-size: 17px; color: #fff; text-shadow: 0 0 4px #000, 0 0 2px #000; }
+#subs div { margin: 3px auto; display: inline-block; background: rgba(0,0,0,.55); padding: 2px 10px; border-radius: 3px; }
+
+/* настройки: флажки и клавиши */
+.checks { display: grid; grid-template-columns: 1fr 1fr; gap: 4px 12px; margin-top: 10px; font-size: 13px; }
+.checks label { display: flex; align-items: center; gap: 6px; cursor: pointer; }
+.binds { display: grid; grid-template-columns: 1fr auto; gap: 4px 10px; font-size: 13px; }
+.binds button { min-width: 90px; padding: 2px 8px; font: inherit; background: #1d1b14; color: #f2e9b8; border: 1px solid #6b6340; cursor: pointer; }
+.binds button.wait { background: #6b5a14; }
+.lv-row.locked { opacity: .35; }
+.lv-row.pick { cursor: pointer; }
+.lv-row.pick:hover { background: rgba(255,240,150,.12); }
+/* дневник и подсказки новичку */
+#journal { position: absolute; top: 8%; left: 50%; transform: translateX(-50%); width: min(720px, 92vw); max-height: 80vh; overflow: auto; display: none;
+  background: rgba(14,12,8,.94); border: 1px solid #6b6340; padding: 16px 20px; z-index: 25; }
+#journal h3 { margin: 0 0 10px; letter-spacing: 4px; }
+#journal .lvh { margin: 14px 0 6px; color: #e8d070; letter-spacing: 2px; }
+#journal .je { margin: 6px 0; padding: 6px 8px; background: rgba(255,255,255,.04); white-space: pre-wrap; font-size: 13px; line-height: 1.45; }
+#journal .je b { display: block; margin-bottom: 3px; }
+#tip { position: absolute; bottom: 190px; left: 50%; transform: translateX(-50%); max-width: 560px; text-align: center; font-size: 15px; padding: 8px 14px;
+  background: rgba(20,18,10,.85); border: 1px solid #8a7a40; opacity: 0; transition: opacity .6s; pointer-events: none; }
+#tip.on { opacity: 1; }
+
+/* шкафчик: смотрим сквозь щели */
+#lockerfx { display: none; background: repeating-linear-gradient(0deg, #000 0 26px, transparent 26px 40px); box-shadow: inset 0 0 160px 80px #000; }
+#lockerfx.on { display: block; }
+/* фоторежим */
+#photofx { display: none; border: 18px solid rgba(0,0,0,.85); box-shadow: inset 0 0 0 1px rgba(255,255,255,.3); text-align: center; }
+#photofx.on { display: block; }
+#photoCap { position: absolute; bottom: 30px; left: 0; right: 0; font-size: 18px; letter-spacing: 3px; color: #f2e9b8; text-shadow: 0 0 4px #000; }
+#photofx small { position: absolute; top: 14px; left: 0; right: 0; opacity: .6; }
+/* ночное видение без постобработки */
+#game.nv { filter: sepia(1) hue-rotate(65deg) saturate(3.5) brightness(1.9) contrast(1.2) !important; }
+/* лобби, рекорды, достижения */
+.lobby { display: flex; gap: 10px; margin: 8px 0; font-size: 13px; flex-wrap: wrap; }
+.lobby select { max-width: 230px; }
+.records { font-size: 12.5px; line-height: 1.5; max-height: 210px; overflow: auto; }
+.records .r { display: grid; grid-template-columns: 1fr auto; gap: 8px; }
+.achs { display: grid; grid-template-columns: 1fr 1fr; gap: 4px 12px; font-size: 12px; max-height: 210px; overflow: auto; }
+.ach { opacity: .45; } .ach.on { opacity: 1; color: #f2d870; } .ach span { display: block; opacity: .75; font-size: 11px; }

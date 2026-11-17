@@ -13,7 +13,8 @@ const { BR, broadcast, patch, removeObj, near, PICK_DIST, sendGoals, checkSolved
 const COLORS = ['blue', 'yellow', 'red'];
 const COLOR_RU = { blue: 'синий', yellow: 'жёлтый', red: 'красный' };
 const REAGENTS = ['СИНИЙ', 'ЗЕЛЁНЫЙ', 'ЯНТАРНЫЙ'];
-const KEY_LATCH = 16, QUARANTINE = 25, COUNTDOWN = 100;
+const FAST = !!process.env.FAST_EVENTS; // для автотестов: события короче
+const KEY_LATCH = 16, QUARANTINE = FAST ? 3 : 25, COUNTDOWN = FAST ? 8 : 100;
 
 // Узлы этажа floor, достижимые от старта, если открыть клетки opens
 function reachable(G, opens, floor) {

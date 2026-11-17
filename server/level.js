@@ -21,7 +21,7 @@ function buildLevel(idx, seed, team, opts = {}) {
   };
   const add = (kind, props) => { const o = Object.assign({ id: G.nextId++, kind }, props); G.objs.push(o); return o; };
 
-  BR.pickSpots(map, rnd, cfg.water, { minDist: 8, minSep: 5 }).forEach((p) => add('water', { x: p.x, y: p.y, z: p.z }));
+  if (!opts.dry) BR.pickSpots(map, rnd, cfg.water, { minDist: 8, minSep: 5 }).forEach((p) => add('water', { x: p.x, y: p.y, z: p.z }));
   if (!team.map && ((opts.forceMap && cfg.mapChance) || rnd() < (cfg.mapChance || 0))) {
     const mp = BR.pickSpots(map, rnd, 1, { minDist: 0.2 * maxD })[0];
     add('mapitem', { x: mp.x, y: mp.y, z: mp.z });
@@ -57,8 +57,25 @@ function buildLevel(idx, seed, team, opts = {}) {
     BR.pickSpots(map, rnd, cfg.items.noisemaker || 0, { minDist: 0.1 * maxD, minSep: 6 }).forEach((p) => add('noisemaker', { x: p.x, y: p.y, z: p.z }));
   }
   if (cfg.skinstealer) SS.placeCages(G, add, rnd);
-  // Воскрешение: аптечки и алтарь на каждом уровне (кроме погони)
+  // Шкафчики: можно спрятаться от существ (у стены, лицом в комнату)
   if (!cfg.chase) {
+    BR.pickWallSpots(map, rnd, cfg.lockers == null ? 4 : cfg.lockers, { minDist: 0.1 * maxD, minSep: 8 })
+      .forEach((p) => add('locker', { x: p.x + p.nx * 0.55, y: p.y, z: p.z + p.nz * 0.55, nx: p.nx, nz: p.nz, who: 0 }));
+  }
+  // Пасхалки: номер 237 в отеле, «4813-я лампа» в Жёлтых комнатах
+  if (map.lv && map.lv.rooms) {
+    const r = map.lv.rooms.find((q) => q.num === 237);
+    if (r && !G.objs.some((o) => o.kind === 'key' && o.room === 237)) {
+      add('lore', { x: BR.centerX(r.cells[2]), y: r.f * map.FH, z: BR.centerZ(r.cells[2]), title: 'Номер 237', egg: 'shining',
+        text: 'В ванной номера 237 полная ванна тёплой воды. На зеркале губной помадой: «ВСЯ РАБОТА И НИКАКОЙ ИГРЫ…»\nДальше смыто. Пахнет старыми коврами и чем-то очень знакомым.' });
+    }
+  }
+  if (idx === 0 && rnd() < 0.08) {
+    const p = BR.pickSpots(map, rnd, 1, { minDist: 0.5 * maxD })[0];
+    if (p) add('egg', { x: p.x, y: p.y, z: p.z, title: '4813-я лампа' });
+  }
+  // Воскрешение: аптечки и алтарь на каждом уровне (кроме погони и хардкора)
+  if (!cfg.chase && opts.revive !== false) {
     BR.pickSpots(map, rnd, cfg.medkits == null ? 2 : cfg.medkits, { minDist: 0.25 * maxD, minSep: 10 }).forEach((p) => add('medkit', { x: p.x, y: p.y, z: p.z }));
     const al = BR.pickSpots(map, rnd, 1, { minDist: 0.45 * maxD })[0];
     if (al) add('altar', { x: al.x, y: al.y, z: al.z, used: false });
@@ -80,6 +97,11 @@ function buildLevel(idx, seed, team, opts = {}) {
       }
       BR.pickSpots(map, rnd, count, { minDist: 0.55 * maxD, minSep: 8 }).forEach((p) => G.mobs.push(newMob(map, p.x, p.y, p.z, 5, type)));
     }
+  }
+  // большая команда — на одно существо больше (основного типа уровня)
+  if (!cfg.chase && (opts.players || 0) >= 4) {
+    const main = list.find((q) => q.type !== 'drowner');
+    if (main) { const p = BR.pickSpots(map, rnd, 1, { minDist: 0.6 * maxD })[0]; if (p) G.mobs.push(newMob(map, p.x, p.y, p.z, 8, main.type)); }
   }
   if (cfg.puzzles.every((p) => pz[p].solved)) { G.doorOpen = true; BR.setDoor(map, true); G.door.open = true; } // уровни без головоломки
   if (cfg.skinstealer) SS.createStealer(G);

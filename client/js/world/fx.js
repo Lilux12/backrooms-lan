@@ -3,6 +3,7 @@
 import * as THREE from 'three';
 import { BR } from '../core/util.js';
 import { glowSprite, glowTexture } from '../render/textures.js';
+import { S } from '../core/state.js';
 
 const lam = (color, emissive = 0) => new THREE.MeshLambertMaterial({ color, emissive });
 
@@ -283,6 +284,88 @@ export function buildFxMore(e, map, group, updaters) {
     case 'serverroom': {
       const l = new THREE.PointLight(0x4080ff, 2.2, 14, 1.5); l.position.set((e.x0 + e.x1 + 1) / 2 * T4, y0 + FH - 0.6, (e.z0 + e.z1 + 1) / 2 * T4); group.add(l);
       updaters.push((dt, t) => { l.intensity = 1.8 + (Math.sin(t * 11) > 0.9 ? 0.8 : 0); });
+      break;
+    }
+    case 'reactor': {
+      // ядро реактора: светящийся столб через все этажи
+      const h = e.F * FH, core = new THREE.Mesh(new THREE.CylinderGeometry(1.0, 1.0, h, 16, 1, true), new THREE.MeshBasicMaterial({ color: 0x40e0ff, transparent: true, opacity: 0.35, side: THREE.DoubleSide, depthWrite: false }));
+      core.position.set(e.x, h / 2, e.z); group.add(core);
+      const l = new THREE.PointLight(0x40d0ff, 3, 26, 1.2); l.position.set(e.x, FH * 1.5, e.z); group.add(l);
+      for (let f = 0; f < e.F; f++) { const gl = glowSprite(0x60e0ff, 7, 0.35); gl.position.set(e.x, f * FH + 1.8, e.z); group.add(gl); }
+      updaters.push((dt, t) => { core.material.opacity = 0.25 + Math.sin(t * 2.2) * 0.1; l.intensity = 2.6 + Math.sin(t * 2.2) * 0.8; });
+      break;
+    }
+    case 'airlock': {
+      const col = { blue: 0x2a6aff, yellow: 0xffc020, red: 0xff2a20 }[e.col];
+      const l = new THREE.PointLight(col, 1.8, 9, 1.5); l.position.set(e.x, y0 + FH - 0.5, e.z); group.add(l);
+      const s = signPlane(`ШЛЮЗ · ${{ blue: 'СИНИЙ', yellow: 'ЖЁЛТЫЙ', red: 'КРАСНЫЙ' }[e.col]} ДОПУСК`, 2.6, 0.38, '#101418', '#' + col.toString(16).padStart(6, '0'));
+      s.position.set(e.x, y0 + FH - 0.45, e.z); group.add(s);
+      break;
+    }
+    case 'specimen': {
+      // стеклянный бак с «образцом»
+      const glass = new THREE.Mesh(new THREE.CylinderGeometry(0.8, 0.8, 2.4, 16, 1, true), new THREE.MeshBasicMaterial({ color: 0x80ffd0, transparent: true, opacity: 0.18, side: THREE.DoubleSide, depthWrite: false }));
+      glass.position.set(e.x, y0 + 1.2, e.z);
+      const blob = new THREE.Mesh(new THREE.SphereGeometry(0.4, 10, 8), lam(0xc8b0a0, 0x200a04)); blob.position.set(e.x, y0 + 1.1, e.z);
+      group.add(glass, blob, cylM(0.9, 0.9, 0.2, lam(0x30383c), e.x, y0 + 0.1, e.z, 16), cylM(0.9, 0.9, 0.2, lam(0x30383c), e.x, y0 + 2.4, e.z, 16));
+      updaters.push((dt, t) => { blob.position.y = y0 + 1.1 + Math.sin(t * 0.8 + e.x) * 0.2; blob.scale.set(1, 1 + Math.sin(t * 1.3 + e.z) * 0.15, 1); });
+      break;
+    }
+    case 'quarantine': {
+      const l = new THREE.PointLight(0xff2010, 2, 12, 1.5); l.position.set(e.x, y0 + FH - 0.4, e.z); group.add(l);
+      updaters.push((dt, t) => { l.intensity = 1 + Math.max(0, Math.sin(t * 4)) * 2; });
+      break;
+    }
+    case 'stage': {
+      const red = lam(0x7a0c14, 0x140204);
+      for (const sx of [-1, 1]) { const c = boxM(3.2, FH - 0.4, 0.2, red, e.x + sx * 22, y0 + (FH - 0.4) / 2, e.z - 1.6); group.add(c); }
+      group.add(boxM(40, 1.0, 0.2, red, e.x, y0 + FH - 0.6, e.z - 1.6));
+      const l = new THREE.SpotLight(0xfff0d0, 8, 24, 0.5, 0.6, 1.2); l.position.set(e.x, y0 + FH - 0.3, e.z - 12); l.target.position.set(e.x, y0, e.z - 2); group.add(l, l.target);
+      break;
+    }
+    case 'playroom': case 'library': case 'boilerroom': case 'piperoom': {
+      const txt = { playroom: 'ИГРОВАЯ', library: 'БИБЛИОТЕКА', boilerroom: 'КОТЕЛЬНАЯ', piperoom: 'ТРУБНАЯ' }[e.k];
+      const s = signPlane(txt, 2.2, 0.42, e.k === 'piperoom' ? '#2a1a0a' : '#f0e0c0', e.k === 'piperoom' ? '#ffb040' : '#4a2a10');
+      s.position.set(e.x, y0 + FH - 0.6, e.z); group.add(s);
+      break;
+    }
+    case 'drawing': {
+      // детский рисунок на полу у стены (плоский лист); после события «рисунки оживают» он шевелится
+      const c = document.createElement('canvas'); c.width = c.height = 128;
+      const g = c.getContext('2d'); g.fillStyle = '#f4efe2'; g.fillRect(0, 0, 128, 128);
+      g.strokeStyle = ['#d02a2a', '#2a5ad0', '#2a9a3a', '#c0802a'][e.n % 4]; g.lineWidth = 4;
+      g.beginPath(); g.arc(64, 38, 16, 0, 7); g.moveTo(64, 54); g.lineTo(64, 96); g.moveTo(40, 70); g.lineTo(88, 70); g.moveTo(64, 96); g.lineTo(46, 122); g.moveTo(64, 96); g.lineTo(82, 122); g.stroke();
+      if (e.n % 3 === 0) { g.fillStyle = '#000'; g.fillRect(56, 34, 4, 4); g.fillRect(68, 34, 4, 4); }
+      const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace;
+      const m = new THREE.Mesh(new THREE.PlaneGeometry(0.9, 0.9), new THREE.MeshLambertMaterial({ map: t, side: THREE.DoubleSide }));
+      m.rotation.x = -Math.PI / 2; m.rotation.z = (e.n * 1.3) % 6.28; m.position.set(e.x + ((e.n % 3) - 1), y0 + 0.02, e.z + ((e.n % 2) - 0.5));
+      group.add(m);
+      updaters.push((dt, tt) => { if (S.drawingsAlive) m.rotation.z += Math.sin(tt * 3 + e.n) * dt * 0.8; });
+      break;
+    }
+    case 'furnace': {
+      // раскалённый пол перед печью — предупреждающие полосы
+      const hot = new THREE.Mesh(new THREE.PlaneGeometry(7.6, 7.6), new THREE.MeshBasicMaterial({ color: 0xff4010, transparent: true, opacity: 0.18, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -2 }));
+      hot.rotation.x = -Math.PI / 2; hot.position.set(e.x + (e.x < 90 ? 2 : -2), 0.03, e.z + (e.z < 90 ? 2 : -2)); group.add(hot);
+      updaters.push((dt, t) => { hot.material.opacity = 0.14 + Math.sin(t * 2 + e.x) * 0.06; });
+      break;
+    }
+    case 'gears': {
+      // гигантские шестерни на стенах шахты
+      const iron = lam(0x4a3a30, 0x0a0604);
+      const make = (r) => { const g = new THREE.Group(); g.add(new THREE.Mesh(new THREE.CylinderGeometry(r, r, 0.3, 24), iron)); for (let k = 0; k < 12; k++) { const a = k / 12 * Math.PI * 2; const tooth = boxM(0.4, 0.3, 0.5, iron, Math.cos(a) * (r + 0.2), 0, Math.sin(a) * (r + 0.2)); tooth.rotation.y = -a; g.add(tooth); } g.rotation.x = Math.PI / 2; return g; };
+      const list = [];
+      for (let f = 1; f < e.F; f++) {
+        for (const [x, z, ry] of [[(e.x0 - 0.45) * T4, (e.z0 + 3) * T4, Math.PI / 2], [(e.x1 + 1.45) * T4, (e.z1 - 3) * T4, Math.PI / 2]]) {
+          const g = make(1.4 + (f % 2) * 0.6); const holder = new THREE.Group(); holder.add(g); holder.position.set(x, f * FH + FH / 2, z); holder.rotation.y = ry; group.add(holder); list.push([g, f % 2 ? 1 : -1]);
+        }
+      }
+      updaters.push((dt) => { for (const [g, dir] of list) g.rotation.y += dt * 0.25 * dir; });
+      break;
+    }
+    case 'control': {
+      const l = new THREE.PointLight(0xff3010, 2.4, 14, 1.4); l.position.set(e.x, y0 + FH - 0.6, e.z); group.add(l);
+      updaters.push((dt, t) => { l.intensity = 1.8 + Math.sin(t * 1.4) * 0.6; });
       break;
     }
     case 'hall': break; // великий зал: архитектура целиком в геометрии

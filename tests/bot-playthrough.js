@@ -12,7 +12,7 @@ const LEVEL_TIMEOUT = 60000;
 
 async function main() {
   const FIRST = +(process.env.START_LEVEL || 0);
-  const srv = await startServer(PORT, { START_LEVEL: String(FIRST), TEST_HOOKS: '1' });
+  const srv = await startServer(PORT, { START_LEVEL: String(FIRST), TEST_HOOKS: '1', FAST_EVENTS: '1' });
   const ws = new WebSocket(`ws://localhost:${PORT}`);
   await new Promise((res, rej) => { ws.onopen = res; ws.onerror = rej; });
   const api = makeBotApi(ws);
@@ -37,7 +37,12 @@ async function main() {
       await api.goTo(door.x, door.y, door.z);
       const done = await api.waitFor((m) => m.t === 'done', LEVEL_TIMEOUT);
       console.log(`  уровень ${level} «${cfg.name}» пройден за ${((Date.now() - t0) / 1000).toFixed(1)} с`);
-      if (done.last) { assert.strictEqual(level, BR.LEVELS.length - 1, 'кампания закончилась раньше последнего уровня'); break; }
+      if (done.last) {
+        assert.strictEqual(level, BR.LEVELS.length - 1, 'кампания закончилась раньше последнего уровня');
+        assert.strictEqual(done.ending, 'escape', 'выход через дверь — не та концовка');
+        console.log(`  концовка: ${done.ending}, время ${done.stats.time} с`);
+        break;
+      }
       init = await api.waitFor((m) => m.t === 'init', 15000);
     }
     console.log(`OK bot-playthrough: все ${BR.LEVELS.length - FIRST} уровней пройдены`);

@@ -48,6 +48,7 @@
       });
     }
     // главный вход: от точки старта вдоль северной стены и между углами магазинов — в галерею
+    BR.fillRect(map, 1, 1, 1, 3, 3, T.FLOOR, 0, true);   // сухой входной холл
     BR.fillRect(map, 1, 1, 1, 11, 1, T.FLOOR, 0, true);
     BR.fillRect(map, 1, 11, 1, 11, 11, T.FLOOR, 0, true);
     map.t[1][idx(12, 11)] = T.FLOOR;
@@ -95,7 +96,11 @@
     BR.addLadders(map, rnd, 0, 1, used);
     for (let f = 0; f <= 3; f++) BR.connectFloor(map, f);
     const wet = [];
-    for (let i = 0; i < NN; i++) { const t = map.t[1][i]; if (t === T.FLOOR || t === T.POOL || t === T.BLOCK || t === T.LOW) wet.push(i); }
+    for (let i = 0; i < NN; i++) {
+      const t = map.t[1][i], x = i % N, z = (i / N) | 0;
+      if (z <= 3 && x <= 11) continue; // вход выше уровня воды
+      if (t === T.FLOOR || t === T.POOL || t === T.BLOCK || t === T.LOW) wet.push(i);
+    }
     BR.addWaterZone(map, wet, FH + 0.9, FH - 1.6);
   }
 

@@ -6,9 +6,11 @@ import { addObj, addObstacleNet, buildWorld, curLevel, map, objs, removeObj, set
 import { refreshObj } from '../world/objects.js';
 import { remotes, setPlayers } from '../entities/avatars.js';
 import { ensureMob, ensureMobs, mobEnts } from '../entities/mobs.js';
-import { sfx, tone } from '../audio/audio.js';
-import { closeKeypad, hideBanner, renderGoals, setStatus, showBanner, showLevelTitle, showNote, toast, updateKeypad } from '../ui/hud.js';
-import { beginPlay } from '../ui/menu.js';
+import { playAt, sfx, tone } from '../audio/audio.js';
+import { caption, closeKeypad, hideBanner, renderGoals, setStatus, showBanner, showLevelTitle, showNote, toast, updateKeypad } from '../ui/hud.js';
+import { beginPlay, noteProgress } from '../ui/menu.js';
+import { addJournal } from '../ui/journal.js';
+import { checkReader, onAch, onDirectorEvent, onEmote, onHide, onUnhide, unlock } from '../game/extras.js';
 import { placeMe } from '../game/player.js';
 import { onSocialNet, social } from '../game/social.js';
 import { onSpectatorNet, spec } from '../game/spectator.js';
@@ -24,16 +26,31 @@ export function connect(name) {
     setStatus('Откройте игру через сервер: запустите start.bat (адрес http://localhost:3000)');
     return;
   }
+  myName = name;
   ws = new WebSocket(`ws://${location.host}`);
-  ws.onopen = () => ws.send(JSON.stringify({ t: 'join', name, token: adminToken() || undefined }));
+  ws.onopen = () => {
+    tries = 0;
+    const color = parseInt((localStorage.getItem('br_color') || '#6aa0ff').slice(1), 16);
+    ws.send(JSON.stringify({ t: 'join', name, token: adminToken() || undefined, role: localStorage.getItem('br_role') || '', color }));
+  };
   ws.onmessage = (e) => onNet(JSON.parse(e.data));
   ws.onclose = () => {
+    const was = S.joined;
     S.joined = false;
-    showBanner('Соединение с сервером потеряно.<br><small>Обновите страницу (F5)</small>');
-    document.exitPointerLock();
+    if (S.kicked) return;
+    // переподключение: сервер помнит игрока по нику ~2 минуты и вернёт на то же место
+    if (tries < 20 && (was || tries > 0)) {
+      tries++;
+      showBanner(`Соединение потеряно. Переподключение… (${tries})<br><small>Если сервер выключен — запустите start.bat и обновите страницу (F5)</small>`);
+      setTimeout(() => connect(myName), 2000);
+    } else {
+      showBanner('Соединение с сервером потеряно.<br><small>Обновите страницу (F5)</small>');
+      document.exitPointerLock();
+    }
   };
-  ws.onerror = () => setStatus('Не удалось подключиться к серверу');
+  ws.onerror = () => setStatus('Не удалось подключиться к серверу. Проверьте адрес и что сервер запущен.');
 }
+let myName = '', tries = 0;
 export const sendNet = (o) => { if (ws && ws.readyState === 1) ws.send(JSON.stringify(o)); };
 
 
@@ -56,6 +73,7 @@ function onNet(m) {
       spec.dead = false; spec.free = false; spec.watch = null; spec.deadIds = new Set(m.dead || []);
       if (m.world) applyWorld(m.world);
       S.admin = !!m.admin;
+      noteProgress(m.level);
       me.stamina = 1; me.exhausted = false;
       S.goalLines = m.goals; S.heldFuses = m.held;
       closeKeypad(); $('note').style.display = 'none';
@@ -64,6 +82,10 @@ function onNet(m) {
       if (m.cells && m.cells.length) for (const c of m.cells) setCellLocal(c.f, c.i, c.type, c.aux);
       for (const o of m.obst || []) addObstacleNet(o);
       S.cctvUntil = 0; S.blackoutUntil = 0; S.finale = false; S.powered = !!m.powered;
+      S.countdownEnd = 0; S.drumUntil = 0; S.drawingsAlive = false; $('countdown').classList.remove('on');
+      S.modifier = m.modifier || ''; S.difficulty = m.difficulty || 'normal'; S.role = m.role || ''; S.myDeaths = 0; S.hiding = null;
+      $('lockerfx').classList.remove('on');
+      $('game').classList.remove('drawings', 'quarantine'); $('gasfx').classList.remove('on');
       hideBanner(); renderGoals();
       showLevelTitle(m.level);
       S.joined = true;
@@ -119,19 +141,30 @@ function onNet(m) {
       }
       break;
     }
-    case 'note': showNote(m.text, m.title); break;
+    case 'note': {
+      showNote(m.text, m.title); addJournal(m.title || 'Записка', m.text);
+      for (const rec of objs.values()) if (rec.o.kind === 'lore' && rec.o.title === m.title) { rec.o._read = true; if (rec.o.egg) unlock('egg'); }
+      checkReader();
+      break;
+    }
+    case 'hide': onHide(m); break;
+    case 'unhide': onUnhide(m); break;
+    case 'emote': onEmote(m); break;
+    case 'ach': onAch(m); break;
     case 'cell': setCellLocal(m.f, m.i, m.type, m.aux); break;
+    case 'correct': placeMe(m.x, m.y, m.z); break; // сервер не принял перемещение (античит/рассинхрон)
     case 'codeok': closeKeypad(); sfx.beep(); break;
     case 'codebad': keypad.buf = ''; updateKeypad(); tone(m.off ? 90 : 150, 0.5, 0.3, 'sawtooth'); break;
     case 'alarm': S.alarmUntil = performance.now() / 1000 + 6; sfx.alarm(); toast('СИРЕНА! Существа идут на шум!', 3500); break;
     case 'sfx': {
       if (!sfx[m.name]) break;
-      // звук с точкой: дальше 60 м не слышно, ближе — громкость по расстоянию
+      // звук с точкой: 3D (направление и затухание), дальше 70 м не слышно
       if (m.x != null) {
         const d = Math.hypot(m.x - me.x, (m.y - me.y) * 1.5, m.z - me.z);
-        if (d > 60) break;
-        sfx[m.name](Math.max(0.15, 1 - d / 60));
-      } else sfx[m.name]();
+        if (d > 70) break;
+        playAt(m.x, m.y + 1, m.z, () => sfx[m.name](1));
+        caption(m.name, m.x, m.z);
+      } else { sfx[m.name](); caption(m.name); }
       break;
     }
     case 'event': onEvent(m); break;
@@ -146,12 +179,23 @@ function onNet(m) {
       toast({ drown: 'Вы захлебнулись и очнулись в другом месте…', stuck: 'Вы вернулись к началу уровня', caught: 'Существо поймало вас! Вы очнулись в другом месте…' }[m.reason] || 'Вы очнулись в другом месте…', 3500);
       break;
     }
-    case 'done':
+    case 'done': {
       sfx.win();
-      showBanner(m.last
-        ? 'ВЫ ВЫБРАЛИСЬ ИЗ ЗАКУЛИСЬЯ<br><small>Но стены так похожи на те, с которых вы начинали…<br>Игра начнётся заново.</small>'
-        : `УРОВЕНЬ ПРОЙДЕН<br><small>Дальше: ${m.next}</small>`);
+      S.countdownEnd = 0; S.drumUntil = 0; $('countdown').classList.remove('on');
+      const st = m.stats || {};
+      const stats = `<span class="endstats">время ${Math.floor((st.time || 0) / 60)}:${String((st.time || 0) % 60).padStart(2, '0')} · смертей ${st.deaths || 0} · записок ${st.notes || 0}` + (st.exposed ? ` · двойников разоблачено ${st.exposed}` : '') + '</span>';
+      // достижения за уровень
+      unlock('first');
+      if (!S.myDeaths) unlock('nodeath');
+      if ((st.time || 999) < 180) unlock('speed');
+      if (m.last) unlock(m.ending === 'stay' ? 'stay' : 'escape');
+      let html;
+      if (!m.last) html = `УРОВЕНЬ ПРОЙДЕН<br><small>Дальше: ${m.next}</small>${stats}`;
+      else if (m.ending === 'stay') html = `${m.by || 'Кто-то'} ОСТАЛСЯ НАДСМОТРЩИКОМ<br><small>Кресло тёплое. Пульт гудит. Где-то загорелись жёлтые лампы, и новые люди проснулись на мокром ковре.<br>Фабрика будет работать вечно — теперь её строите вы.<br>Игра начнётся заново.</small>${stats}`;
+      else html = `ФАБРИКА РАЗРУШЕНА<br><small>Вы вышли под чёрное небо, и Закулисье рассыпалось за спиной, как старые обои.<br>Солнечный свет. Шум машин. Ваш дом…<br>…но в коридоре гудит лампа. Игра начнётся заново.</small>${stats}`;
+      showBanner(html);
       break;
+    }
     case 'ev': toast(m.text, 3000); break;
     case 'water': setWater(m.wl); break;
     case 'add': addObj(m.o); break;
@@ -166,6 +210,7 @@ function onNet(m) {
 // События уровня от сервера: свет гаснет, тряска, пар, пролом, финальный побег
 function onEvent(m) {
   const now = performance.now() / 1000;
+  if (onDirectorEvent(m)) return; // шёпот, шаги, лицо в обоях, звонок, мигание
   switch (m.k) {
     case 'blackout': S.blackoutUntil = now + (m.dur || 3); sfx.zap(); toast('Перегрузка! Свет погас…', 2500); break;
     case 'quake': me.shake = Math.max(me.shake || 0, 0.4 * (m.dur || 1)); sfx.rumble(); break;
@@ -182,6 +227,22 @@ function onEvent(m) {
       const fl = $('flash'); fl.classList.add('on'); setTimeout(() => fl.classList.remove('on'), 120);
       break;
     }
+    case 'quarantine': {
+      S.quarantineUntil = now + (m.dur || 25); sfx.alarm(); $('game').classList.add('quarantine');
+      setTimeout(() => $('game').classList.remove('quarantine'), (m.dur || 25) * 1000);
+      break;
+    }
+    case 'gas': $('gasfx').classList.add('on'); sfx.cough(); setTimeout(() => sfx.cough(), 1500); setTimeout(() => $('gasfx').classList.remove('on'), (m.dur || 8) * 1000); break;
+    case 'countdown': {
+      S.countdownEnd = now + m.left;
+      $('countdown').classList.add('on');
+      if (m.left <= 10) sfx.tick();
+      break;
+    }
+    case 'flash': { const fl = $('flash'); fl.classList.add('on'); setTimeout(() => fl.classList.remove('on'), 900); sfx.boom(1); break; }
+    case 'drawings': S.drawingsAlive = true; $('game').classList.add('drawings'); sfx.giggle(); break;
+    case 'drum': S.drumUntil = now + 9999; break;
+    case 'conveyor': sfx.clang(); setTimeout(() => sfx.clang(), 300); break;
     case 'caralarms': for (let k = 0; k < 3; k++) setTimeout(() => sfx.caralarm(0.7), k * 400); toast('Генератор взревел — по всей парковке воют сигнализации!', 3500); break;
   }
 }

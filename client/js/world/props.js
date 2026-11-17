@@ -93,6 +93,9 @@ const DECOR = {
   pool:     { props: ['wetsign', 'cone', 'bin'], decal: [0xaee6f0, 0.4] },
   office:   { props: ['bin', 'crate', 'bin'], decal: [0x1a1a10, 0.5] },
   run:      { props: ['biobox', 'ivstand', 'bin'], pipes: 'rail', decal: [0x5a0808, 0.6] },
+  lab:      { props: ['biobox', 'bin', 'crate'], pipes: 'duct', decal: [0x203a30, 0.45] },
+  school:   { props: ['chair', 'crate', 'bin'], decal: [0x3a2a10, 0.4] },
+  factory:  { props: ['rustbarrel', 'barrel', 'crate'], pipes: 'pipes', decal: [0x2a1004, 0.6] },
   hotel:    { props: ['luggage', 'vase', 'luggage', 'chair'], pipes: 'rail', decal: [0x1a0404, 0.45] },
   mall:     { props: ['shopcart', 'planter', 'bin', 'wetsign'], decal: [0x30404a, 0.4] },
 };

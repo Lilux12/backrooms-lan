@@ -60,6 +60,9 @@
     { cmd: 'fov', tab: 'world', label: 'Угол обзора всем', args: [num('v', '°', 30, 140, 75)], notice: 'Угол обзора: {v}°' },
     { cmd: 'filter', tab: 'world', label: 'Фильтр картинки', args: [sel('v', 'фильтр', FILTERS)], notice: 'Фильтр: {v}' },
     { cmd: 'freecam', tab: 'world', label: 'Свободная камера призракам', args: [ON], notice: 'Свободная камера призраков: {on}' },
+    { cmd: 'difficulty', tab: 'world', label: 'Сложность', args: [sel('v', 'сложность', [['easy', 'Лёгкая'], ['normal', 'Нормальная'], ['hard', 'Хардкор']])], notice: 'Хост сменил сложность: {v}' },
+    { cmd: 'daily', tab: 'world', label: 'Ежедневный сид (одни карты у всех сегодня)', args: [ON], notice: 'Ежедневный сид: {on}' },
+    { cmd: 'modifiers', tab: 'world', label: 'Случайные модификаторы раундов', args: [ON], notice: 'Модификаторы раундов: {on}' },
     // ---- Существа ----
     { cmd: 'spawn', tab: 'mobs', label: 'Призвать существо рядом со мной', args: [sel('type', 'кого', MOBS)], notice: 'Хост призвал: {type}' },
     { cmd: 'killall', tab: 'mobs', label: 'Убрать всех существ', args: [], notice: 'Хост убрал всех существ' },

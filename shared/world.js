@@ -436,7 +436,17 @@
     }
     if (b.swim && p.y > b.y + 0.2) inp.up = true;
     if (b.swim && (p.y < b.y - 0.3 || tn === T.VENT)) inp.down = true; // нырнуть в лаз или под воду
-    if (b.ladder >= 0 && p.y < b.y - 0.5) inp.down = true;
+    if (b.ladder >= 0 && p.y < b.y - 0.5) {
+      // спуск по стремянке: держимся центра шахты, к следующей клетке отходим только внизу
+      // (иначе тело цепляется за пол верхнего этажа у края провала и ходит туда-обратно)
+      inp.down = true;
+      const lc = BR.cellAt(b.x, b.z);
+      if (lc >= 0) {
+        const dx = centerX(lc) - b.x, dz = centerZ(lc) - b.z, d = Math.hypot(dx, dz);
+        if (d > 0.05) { const v = Math.min(speed, d * 6); inp.vx = (dx / d) * v; inp.vz = (dz / d) * v; }
+      }
+      return inp;
+    }
     const dx = p.x - b.x, dz = p.z - b.z, dist = Math.hypot(dx, dz);
     if (dist > 0.05) {
       const v = Math.min(speed, dist * 6);

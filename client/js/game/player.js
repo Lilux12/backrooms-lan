@@ -1,6 +1,6 @@
 // Игрок: фонарик, движение (общая физика из shared/world.js), кислород, падения, камера
 import { $, BR, LEVELS, clamp } from '../core/util.js';
-import { settings } from '../core/settings.js';
+import { key, settings } from '../core/settings.js';
 import { FL, S, keypad, keys, me } from '../core/state.js';
 import { camera } from '../render/scene.js';
 import { curLevel, map } from '../world/world.js';
@@ -48,7 +48,7 @@ export function updateMovement(dt) {
   if (!(S.joined && map && me.body)) return { moving, sprint };
   const b = me.body;
   const md = myMods();
-  const active = S.locked && !keypad.open && !S.bigOn && !social.caged && !md.frozen && !S.adminOpen;
+  const active = S.locked && !keypad.open && !S.bigOn && !social.caged && !md.frozen && !S.adminOpen && !S.hiding;
   let ix = 0, iz = 0;
   if (active) {
     if (keys.KeyW || keys.ArrowUp) iz += 1;
@@ -59,18 +59,19 @@ export function updateMovement(dt) {
   }
   moving = !!(ix || iz);
   const len = Math.hypot(ix, iz) || 1; ix /= len; iz /= len;
-  const crouch = active && !!keys.KeyC;
-  sprint = moving && active && (keys.ShiftLeft || keys.ShiftRight) && !me.exhausted && me.stamina > 0 && !crouch && !b.swim;
+  const crouch = active && !!keys[key('crouch')];
+  const sprintKey = keys[key('sprint')] || (key('sprint') === 'ShiftLeft' && keys.ShiftRight);
+  sprint = moving && active && sprintKey && !me.exhausted && me.stamina > 0 && !crouch && !b.swim;
   let spd = (sprint ? RUN : WALK) * (md.speed || 1);
   if (me.stunned > 0) { me.stunned -= dt; spd *= 0.45; }
   const fx = -Math.sin(me.yaw), fz = -Math.cos(me.yaw), rx = Math.cos(me.yaw), rz = -Math.sin(me.yaw);
   const onLadder = b.ladder >= 0;
   const inp = {
     vx: (fx * iz + rx * ix) * spd, vz: (fz * iz + rz * ix) * spd,
-    jump: active && !!keys.Space,
+    jump: active && !!keys[key('jump')],
     // на лестнице W/S — вверх/вниз; в воде Пробел/C — всплыть/нырнуть
-    up: active && (onLadder ? (keys.KeyW || keys.ArrowUp || keys.Space) : keys.Space),
-    down: active && (onLadder ? (keys.KeyS || keys.ArrowDown || keys.KeyC) : (b.swim && keys.KeyC)),
+    up: active && (onLadder ? (keys.KeyW || keys.ArrowUp || keys[key('jump')]) : keys[key('jump')]),
+    down: active && (onLadder ? (keys.KeyS || keys.ArrowDown || keys[key('crouch')]) : (b.swim && keys[key('crouch')])),
     crouch: crouch && !b.swim && !onLadder,
   };
   if (me.knock && me.knock.t > 0) { inp.vx += me.knock.vx; inp.vz += me.knock.vz; me.knock.t -= dt; } // отбросило взрывом
@@ -78,7 +79,7 @@ export function updateMovement(dt) {
   let res = { landed: 0 };
   if (md.fly || md.noclip) {
     // полёт: Пробел — вверх, C — вниз; сквозь стены — без столкновений
-    const vy = active ? ((keys.Space ? 1 : 0) - (keys.KeyC ? 1 : 0)) * spd : 0;
+    const vy = active ? ((keys[key('jump')] ? 1 : 0) - (keys[key('crouch')] ? 1 : 0)) * spd : 0;
     const nx = b.x + inp.vx * dt, ny = b.y + vy * dt, nz = b.z + inp.vz * dt;
     const free = (x, y, z) => md.noclip || !BR.blocked(map, x, y, z, BR.PHYS.R, BR.PHYS.H, 0.05);
     if (free(nx, b.y, b.z)) b.x = nx;
@@ -114,7 +115,7 @@ export function updateMovement(dt) {
   if (moving && (b.onGround || b.swim || onLadder)) {
     me.bob += dt * (sprint ? 12 : b.crouch ? 5 : 8);
     const phase = Math.floor(me.bob / Math.PI);
-    if (phase !== me.stepPhase) { me.stepPhase = phase; if (!b.swim) sfx.step(sprint); }
+    if (phase !== me.stepPhase) { me.stepPhase = phase; if (!b.swim) sfx.step(sprint, b.wade); }
   }
   $('underwater').style.opacity = b.underwater ? '1' : '0';
   return { moving, sprint };
@@ -138,7 +139,7 @@ export function updateCamera(dt, moving, sprint) {
 
 // Батарея фонарика: садится при работе, сама восстанавливается
 export function updateBattery(dt) {
-  if (FL.on) { FL.bat -= dt / 200; if (FL.bat <= 0) { FL.bat = 0; FL.on = false; sfx.fl(); toast('Батарея фонарика села — подождите, она восстановится', 3000); } }
+  if (FL.on) { FL.bat -= dt / (S.modifier === 'drain' ? 100 : 200); if (FL.bat <= 0) { FL.bat = 0; FL.on = false; sfx.fl(); toast('Батарея фонарика села — подождите, она восстановится', 3000); } }
   else FL.bat = Math.min(1, FL.bat + dt / 150);
 }
 

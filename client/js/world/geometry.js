@@ -181,6 +181,7 @@ export function buildLevelGeometry(map, mats, st, seed, panelMat) {
       if (t !== T.VENT && t !== T.LOW && up !== T.HOLE) {
         const cy = f + 1 < F ? b + FH - SLAB : b + FH;
         if (f + 1 >= F && map.glass[i]) { glass.push(mtx(x, cy, z)); continue; } // стеклянная крыша
+        if (f + 1 >= F && map.sky) continue; // фабрика: над верхним ярусом — чёрное небо
         ceils.push(mtx(x, cy, z));
         const h = Math.sin(cx * 12.9898 + cz * 78.233 + seed + f * 7.1) * 43758.5453;
         if (t !== T.STAIR && st.panel.test(cx, cz, h - Math.floor(h))) panels.push(mtx(x, cy - 0.02, z));
@@ -199,8 +200,9 @@ export function buildLevelGeometry(map, mats, st, seed, panelMat) {
     }
   }
 
-  const add = (mesh) => { if (mesh) group.add(mesh); return mesh; };
-  add(instanced(new THREE.BoxGeometry(TILE, FH, TILE), wallMat, walls));
+  // тени фонаря: всё принимает тени, стены и препятствия — отбрасывают
+  const add = (mesh, cast = false) => { if (mesh) { mesh.receiveShadow = true; mesh.castShadow = cast; group.add(mesh); } return mesh; };
+  add(instanced(new THREE.BoxGeometry(TILE, FH, TILE), wallMat, walls), true);
   const fl = new THREE.PlaneGeometry(TILE, TILE); fl.rotateX(-Math.PI / 2);
   add(instanced(fl, floorMat, floors));
   add(instanced(fl.clone(), floorMat, poolFloors));
@@ -210,10 +212,10 @@ export function buildLevelGeometry(map, mats, st, seed, panelMat) {
   const face = new THREE.PlaneGeometry(TILE, 1);
   add(instanced(face, wallMat, edges));
   add(instanced(face.clone(), floorMat, poolSides));
-  add(instanced(new THREE.BoxGeometry(TILE, FH, TILE), wallMat, fills));
+  add(instanced(new THREE.BoxGeometry(TILE, FH, TILE), wallMat, fills), true);
   if (st.escalator) { for (const [g, m] of escalatorParts(FH)) add(instanced(g, m, stairs)); }
   else add(instanced(st.ramp ? rampGeo(FH) : stairGeo(FH), floorMat, stairs));
-  for (const mesh of buildBlocks(blocks)) group.add(mesh);
+  for (const mesh of buildBlocks(blocks)) add(mesh, true);
   add(instanced(ladderGeo(FH + 1.1), new THREE.MeshLambertMaterial({ color: 0x8a8f94 }), ladders));
   // стеклянная крыша: мутное небо в переплёте рам
   if (glass.length) {

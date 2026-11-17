@@ -72,7 +72,8 @@ function addSwitch(add, pos, group, latch, label, extra = {}) {
 }
 function useSwitch(G, c, o) {
   if (o.kind !== 'switch' || o.disabled) return false;
-  o.hold = o.latch; o.usedT = 0.6; // E — как короткое нажатие
+  o.hold = o.latch * (c.role === 'mechanic' ? 1.4 : 1); o.usedT = 0.6; // E — как короткое нажатие; механик держит дольше
+  o.byMech = c.role === 'mechanic';
   return true;
 }
 function tickSwitches(G, players, dt) {
@@ -80,8 +81,10 @@ function tickSwitches(G, players, dt) {
   for (const o of G.objs) {
     if (o.kind !== 'switch') continue;
     if (o.usedT > 0) o.usedT -= dt;
-    const pressed = !o.disabled && (o.usedT > 0 || players.some((p) => near(o, p, PRESS_DIST)));
-    o.hold = pressed ? o.latch : Math.max(0, o.hold - dt);
+    const by = players.filter((p) => near(o, p, PRESS_DIST));
+    const pressed = !o.disabled && (o.usedT > 0 || by.length > 0);
+    if (by.length) o.byMech = by.some((p) => p.role === 'mechanic');
+    o.hold = pressed ? o.latch * (o.byMech ? 1.4 : 1) : Math.max(0, o.hold - dt);
     const on = o.hold > 0;
     if (on !== o.on || pressed !== o.pressed) {
       patch(o, { on, pressed, left: +o.hold.toFixed(1) });
@@ -128,7 +131,7 @@ function nodeNear(G, rnd, a, dMin, dMax, prefer = () => true) {
 }
 
 // Хуки, которые задаёт index.js (иначе получились бы циклические require)
-const hooks = { sendGoals: () => {}, checkSolved: () => {}, teleport: () => {}, kill: () => {}, finish: () => {} };
+const hooks = { sendGoals: () => {}, checkSolved: () => {}, teleport: () => {}, kill: () => {}, finish: () => {}, addObj: () => {} };
 const sendGoals = (G) => hooks.sendGoals(G);
 const checkSolved = (G) => hooks.checkSolved(G);
 

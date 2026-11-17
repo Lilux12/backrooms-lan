@@ -18,6 +18,7 @@ const MAPPAL = {
   yellow: ['#8d7d38', '#2b2610', '#0d0b03'], concrete: ['#7b7f86', '#24262a', '#0a0b0c'], tunnel: ['#8a5a44', '#2a1710', '#0d0605'],
   pool: ['#58bccb', '#1b4e57', '#04161a'], run: ['#a9c4b6', '#22332c', '#06100c'], office: ['#98a081', '#2a2e22', '#0a0b08'],
   hotel: ['#a8604a', '#2e1610', '#0c0604'], mall: ['#b8bcc0', '#2a2e32', '#0a0c0e'],
+  lab: ['#8ab8c0', '#1e3438', '#060e10'], school: ['#c8a878', '#3a2c18', '#0e0a04'], factory: ['#a0603a', '#2a160a', '#0c0602'],
 };
 const OBJ_DOT = { water: '#7fe8ff', fuse: '#ffb030', box: '#ffffff', keypad: '#ffffff', note: '#f0e8b0' };
 
@@ -118,7 +119,9 @@ function markDots(ctx, X, Y, r) {
 export function drawMinimap() {
   if (!S.mmOn || !map) return;
   const pal = MAPPAL[LEVELS[curLevel].style] || MAPPAL.yellow;
-  const R = UP.map ? 16 : 9, s = mm.width, cell = s / (R * 2 + 1);
+  if (S.modifier === 'nomap') { $('minimapWrap').style.opacity = '0'; return; }
+  $('minimapWrap').style.opacity = '';
+  const R = UP.map ? 16 : S.role === 'scout' ? 12 : 9, s = mm.width, cell = s / (R * 2 + 1);
   const px = me.x / TILE, pz = me.z / TILE, fl = myFloor();
   const X = (wx) => (wx / TILE - px) * cell + s / 2, Y = (wz) => (wz / TILE - pz) * cell + s / 2;
   mg.fillStyle = pal[2]; mg.fillRect(0, 0, s, s);

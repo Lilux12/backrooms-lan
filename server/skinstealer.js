@@ -67,6 +67,7 @@ function expose(G, why) {
   broadcast({ t: 'exposed', id: d.id, x: ss.m.x, y: ss.m.y, z: ss.m.z });
   broadcast({ t: 'ev', text: `Это был не ${d.name}! ДВОЙНИК! (${why})` });
   broadcast({ t: 'sfx', name: 'shriek' });
+  broadcast({ t: 'ach', id: 'exposer' });
   if (G.stats) G.stats.exposed++;
   setState(G, 'EXPOSED', T.flee);
   log(`двойник разоблачён: ${why}`);

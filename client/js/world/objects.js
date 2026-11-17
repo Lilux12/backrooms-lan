@@ -325,6 +325,23 @@ export function createObj(o) {
         const arm = new THREE.Group(); arm.position.set(0, 1.7, 0); arm.add(bx(0.8, 0.07, 0.07, lam(0x222222), 0.3, 0, 0)); grp.add(arm);
         rec.parts.arm = arm;
         lampM = bx(0.12, 0.12, 0.05, lampMat, 0, 0.75, 0.26);
+      } else if (st === 'key') {
+        grp.add(bx(0.7, 1.2, 0.5, lam(0x2a3034), 0, 0.6, 0), bx(0.5, 0.35, 0.05, lam(0xd8b020), 0, 1.0, 0.26));
+        const keyArm = new THREE.Group(); keyArm.position.set(0, 1.0, 0.3); keyArm.add(bx(0.06, 0.18, 0.06, lam(0xc8c8c0), 0, 0, 0)); grp.add(keyArm);
+        rec.parts.arm = keyArm;
+        lampM = bx(0.12, 0.12, 0.05, lampMat, 0, 1.3, 0.26);
+      } else if (st === 'swing') {
+        const frame = lam(0x8a3030);
+        grp.add(cy(0.05, 0.05, 2.6, frame, -0.9, 1.3, 0, 6), cy(0.05, 0.05, 2.6, frame, 0.9, 1.3, 0, 6), cy(0.05, 0.05, 1.9, frame, 0, 2.6, 0, 6));
+        grp.children[2].rotation.z = Math.PI / 2;
+        const sw = new THREE.Group(); sw.position.set(0, 2.6, 0);
+        sw.add(cy(0.01, 0.01, 1.9, lam(0x888888), -0.3, -0.95, 0, 4), cy(0.01, 0.01, 1.9, lam(0x888888), 0.3, -0.95, 0, 4), bx(0.7, 0.06, 0.3, lam(0x3a6aa0), 0, -1.9, 0));
+        grp.add(sw); rec.parts.swing = sw;
+        lampM = bx(0.1, 0.1, 0.1, lampMat, 0, 2.7, 0);
+      } else if (st === 'console') {
+        grp.add(bx(1.4, 1.0, 0.8, lam(0x2a2420), 0, 0.5, 0), bx(1.4, 0.1, 0.9, lam(0x1a1614), 0, 1.05, 0));
+        const scr = bx(1.0, 0.6, 0.05, new THREE.MeshBasicMaterial({ color: 0x401008 }), 0, 1.5, -0.3); scr.rotation.x = -0.3; grp.add(scr);
+        lampM = bx(0.2, 0.08, 0.05, lampMat, 0, 1.12, 0.3);
       } else if (st === 'desk') {
         grp.add(bx(2.2, 1.05, 0.7, lam(0x6b5a44), 0, 0.52, 0), bx(2.3, 0.06, 0.8, lam(0x2b2b2b), 0, 1.08, 0));
         lampM = cy(0.1, 0.12, 0.08, lampMat, 0.6, 1.16, 0.1, 12);
@@ -430,6 +447,123 @@ export function createObj(o) {
       rec.parts.lampG = lampG;
       break;
     }
+    case 'labcard': {
+      const col = { blue: 0x2a6aff, yellow: 0xffc020, red: 0xff2a20 }[o.group] || 0xffffff;
+      grp.add(bx(0.32, 0.2, 0.015, lam(col, col & 0x333333), 0, 0, 0), bx(0.1, 0.06, 0.017, lam(0xd8d8d0), -0.08, 0.04, 0), glowSprite(col, 1.3, 0.6));
+      grp.position.set(o.x, 1.0, o.z); rec.bob = true;
+      break;
+    }
+    case 'cardreader': {
+      const col = { blue: 0x2a6aff, yellow: 0xffc020, red: 0xff2a20 }[o.group] || 0xffffff;
+      grp.add(cy(0.08, 0.1, 1.2, lam(0x30343a), 0, 0.6, 0, 8), bx(0.3, 0.4, 0.12, lam(0x1a1c20), 0, 1.35, 0), bx(0.22, 0.05, 0.02, lam(col, col & 0x444444), 0, 1.45, 0.07));
+      const led = bx(0.06, 0.06, 0.02, new THREE.MeshBasicMaterial({ color: 0xff2020 }), 0, 1.25, 0.07); grp.add(led);
+      grp.position.set(o.x, 0, o.z); rec.parts.led = led;
+      break;
+    }
+    case 'mixer': {
+      grp.add(bx(1.6, 1.0, 0.9, lam(0xc8d0d4), 0, 0.5, 0), bx(1.6, 0.06, 0.95, lam(0x2a3034), 0, 1.03, 0));
+      for (let k = 0; k < 3; k++) grp.add(cy(0.09, 0.09, 0.4, new THREE.MeshLambertMaterial({ color: 0xc0f0ff, transparent: true, opacity: 0.5 }), -0.5 + k * 0.5, 1.26, 0, 10));
+      const screen = bx(0.6, 0.35, 0.03, new THREE.MeshBasicMaterial({ color: 0x103020 }), 0, 1.4, -0.4); grp.add(screen);
+      grp.position.set(o.x, 0, o.z); rec.parts.screen = screen;
+      break;
+    }
+    case 'reagent': {
+      const col = [0x2a6aff, 0x30d050, 0xffa020][o.col] || 0xffffff;
+      grp.add(bx(0.5, 1.1, 0.4, lam(0x5a646a), 0, 0.55, 0), cy(0.14, 0.14, 0.5, new THREE.MeshLambertMaterial({ color: col, emissive: col & 0x333333, transparent: true, opacity: 0.8 }), 0, 1.35, 0, 12),
+        cy(0.05, 0.05, 0.2, lam(0x222222), 0, 1.7, 0, 6), glowSprite(col, 1.2, 0.35));
+      grp.children[3].position.y = 1.4;
+      grp.position.set(o.x, 0, o.z);
+      break;
+    }
+    case 'puzzlepiece': {
+      const c2 = document.createElement('canvas'); c2.width = c2.height = 64;
+      const g2 = c2.getContext('2d'); g2.fillStyle = ['#e85a5a', '#5ab0e8', '#e8d05a', '#7ae85a', '#c05ae8', '#e8905a'][(o.n || 0) % 6]; g2.fillRect(8, 8, 48, 48);
+      g2.beginPath(); g2.arc(32, 8, 9, 0, 7); g2.arc(56, 32, 9, 0, 7); g2.fill();
+      const t2 = new THREE.CanvasTexture(c2); t2.colorSpace = THREE.SRGBColorSpace;
+      grp.add(new THREE.Mesh(new THREE.PlaneGeometry(0.45, 0.45), new THREE.MeshBasicMaterial({ map: t2, transparent: true, side: THREE.DoubleSide })), glowSprite(0xffe0a0, 1.2, 0.4));
+      grp.position.set(o.x, 1.0, o.z); rec.bob = true;
+      break;
+    }
+    case 'puzzleboard': {
+      grp.add(bx(2.6, 1.8, 0.1, lam(0x6a4a2a), 0, 1.7, 0), cy(0.05, 0.05, 1.0, lam(0x3a2a1a), -1.0, 0.5, 0, 6), cy(0.05, 0.05, 1.0, lam(0x3a2a1a), 1.0, 0.5, 0, 6));
+      rec.parts.cells = [];
+      for (let k = 0; k < 6; k++) { const c = bx(0.75, 0.75, 0.02, lam(0x2a2a2a), -0.8 + (k % 3) * 0.8, 2.1 - Math.floor(k / 3) * 0.8, 0.06); grp.add(c); rec.parts.cells.push(c); }
+      grp.position.set(o.x, 0, o.z);
+      break;
+    }
+    case 'toy': {
+      const g3 = new THREE.Group();
+      if (o.toy === 'bear') { g3.add(new THREE.Mesh(new THREE.SphereGeometry(0.16, 12, 10), lam(0x8a5a2a)), cy(0.05, 0.05, 0.02, lam(0x8a5a2a), -0.1, 0.16, 0, 8), cy(0.05, 0.05, 0.02, lam(0x8a5a2a), 0.1, 0.16, 0, 8)); }
+      else if (o.toy === 'bunny') { g3.add(new THREE.Mesh(new THREE.SphereGeometry(0.15, 12, 10), lam(0xe8e8e0)), bx(0.05, 0.22, 0.03, lam(0xe8e8e0), -0.05, 0.22, 0), bx(0.05, 0.22, 0.03, lam(0xe8e8e0), 0.05, 0.22, 0)); }
+      else { g3.add(new THREE.Mesh(new THREE.SphereGeometry(0.15, 12, 10), lam(0xffd020)), bx(0.12, 0.04, 0.08, lam(0xff8020), 0, 0, 0.16)); }
+      grp.add(g3, glowSprite(0xfff0c0, 1.1, 0.4));
+      grp.position.set(o.x, 1.0, o.z); rec.bob = true;
+      break;
+    }
+    case 'shelf': {
+      const col = { red: 0xd03030, green: 0x30a040, blue: 0x3060d0 }[o.color] || 0x888888;
+      grp.add(bx(1.4, 0.08, 0.5, lam(0x6a4a2a), 0, 1.4, 0), bx(1.4, 0.1, 0.06, lam(col, col & 0x222222), 0, 1.5, 0.25), bx(0.06, 1.4, 0.5, lam(0x5a3a1a), -0.7, 0.7, 0), bx(0.06, 1.4, 0.5, lam(0x5a3a1a), 0.7, 0.7, 0));
+      const seat = new THREE.Group(); seat.position.y = 1.6; grp.add(seat);
+      grp.position.set(o.x, 0, o.z); rec.parts.seat = seat;
+      break;
+    }
+    case 'musicbox': {
+      grp.add(bx(0.6, 0.6, 0.6, lam(0x6a2a4a), 0, 0.3, 0), bx(0.64, 0.08, 0.64, lam(0xd8b040), 0, 0.64, 0), cy(0.025, 0.025, 0.3, lam(0xd8b040), 0.36, 0.4, 0, 6));
+      const dancer = new THREE.Group(); dancer.position.y = 0.7;
+      dancer.add(cy(0.04, 0.12, 0.25, lam(0xf0d0e0), 0, 0.12, 0, 8), new THREE.Mesh(new THREE.SphereGeometry(0.05, 8, 6), lam(0xf0d8c8)));
+      dancer.children[1].position.y = 0.3;
+      grp.add(dancer, glowSprite(0xffc0e0, 1.2, 0.3));
+      grp.children[grp.children.length - 1].position.y = 1.0;
+      grp.position.set(o.x, 0, o.z); rec.parts.dancer = dancer;
+      break;
+    }
+    case 'furnace': {
+      grp.add(bx(1.8, 2.4, 1.8, lam(0x3a2a22, 0x0a0402), 0, 1.2, 0), cy(0.25, 0.3, 2.0, lam(0x2a2220), 0, 3.4, 0, 10));
+      const mouth = bx(0.9, 0.8, 0.05, new THREE.MeshBasicMaterial({ color: 0x220a04 }), 0, 0.8, 0.92); grp.add(mouth);
+      const plate = textPlane((g, s2) => { g.fillStyle = '#d8c8a0'; g.fillRect(30, 80, 196, 96); g.fillStyle = '#2a1a0a'; g.font = 'bold 64px "Courier New"'; g.textAlign = 'center'; g.fillText(`${o.temp}°`, 128, 152); }, 0.8, true);
+      plate.position.set(0, 1.85, 0.93); grp.add(plate);
+      const glow = glowSprite(0xff7020, 3.2, 0); glow.position.set(0, 0.9, 1.3); grp.add(glow);
+      // печь стоит в клетке-стене за объектом и смотрит в центр шахты
+      const cx = 22.5 * TILE, cz = 22.5 * TILE, dx = o.x - cx, dz = o.z - cz, d = Math.hypot(dx, dz) || 1;
+      grp.position.set(o.x + dx / d * 2.4, 0, o.z + dz / d * 2.4); grp.rotation.y = Math.atan2(-dx, -dz);
+      rec.parts = { mouth, glow };
+      break;
+    }
+    case 'pipevalve': {
+      grp.add(cy(0.15, 0.15, 3.0, lam(0x5a4a3a), 0, 1.5, 0, 10));
+      const wheel = new THREE.Group(); wheel.position.set(0, 1.3, 0.25);
+      wheel.add(new THREE.Mesh(new THREE.TorusGeometry(0.32, 0.04, 8, 18), lam(0xc02a20)), bx(0.06, 0.6, 0.04, lam(0xc02a20), 0, 0, 0));
+      const arrow = textPlane((g) => { g.fillStyle = '#ffe080'; g.font = 'bold 140px sans-serif'; g.textAlign = 'center'; g.fillText('▲', 128, 180); }, 0.4, true);
+      arrow.position.set(0, 1.85, 0.2);
+      grp.add(wheel, arrow);
+      grp.position.set(o.x, 0, o.z); rec.parts = { wheel, arrow };
+      break;
+    }
+    case 'ending': {
+      const seat = lam(0x2a1a14, 0x080402), metal = lam(0x5a4a3a);
+      grp.add(bx(1.2, 0.5, 1.0, seat, 0, 0.5, 0), bx(1.2, 2.2, 0.2, seat, 0, 1.6, -0.45), bx(0.15, 0.5, 1.0, metal, -0.65, 0.95, 0), bx(0.15, 0.5, 1.0, metal, 0.65, 0.95, 0));
+      const halo = glowSprite(0xff4020, 3, 0); halo.position.y = 2.4; grp.add(halo);
+      grp.position.set(o.x, 0, o.z); rec.parts = { halo };
+      break;
+    }
+    case 'locker': {
+      // металлический шкафчик у стены: можно спрятаться (сквозь щели видно комнату)
+      const steel = lam(0x5a6670, 0x0a0c0e), dark = lam(0x1a1e22);
+      const g2 = new THREE.Group();
+      g2.add(bx(1.0, 2.1, 0.7, steel, 0, 1.05, 0), bx(0.9, 1.9, 0.02, lam(0x6a7680), 0, 1.0, 0.36));
+      for (let k = 0; k < 6; k++) g2.add(bx(0.5, 0.03, 0.01, dark, 0, 1.6 + k * 0.06, 0.375));
+      g2.add(bx(0.05, 0.15, 0.04, lam(0xb0b4b8), 0.35, 1.0, 0.39));
+      g2.rotation.y = Math.atan2(o.nx || 0, o.nz || 0);
+      grp.add(g2);
+      grp.position.set(o.x - (o.nx || 0) * 0.15, 0, o.z - (o.nz || 0) * 0.15);
+      break;
+    }
+    case 'egg': {
+      // «4813-я лампа»: лампа, которая не гудит
+      grp.add(bx(1.2, 0.08, 0.3, lam(0xd8d0b0), 0, 0, 0), bx(1.1, 0.04, 0.22, new THREE.MeshBasicMaterial({ color: 0xfff8d0 }), 0, -0.05, 0), glowSprite(0xfff4c0, 2.2, 0.6));
+      grp.position.set(o.x, 1.2, o.z); rec.bob = true;
+      break;
+    }
     case 'door': {
       G.doorObj = o;
       const alongX = o.dx !== 0;
@@ -480,12 +614,26 @@ export function refreshObj(rec) {
     p.top.position.y = o.on ? 0.05 : 0.09;
   } else if (o.kind === 'switch') {
     o._t = performance.now();
-    p.lampM.material.color.setHex(o.on ? 0x30ff60 : 0x661010);
+    p.lampM.material.color.setHex(o.disabled ? 0x202020 : o.on ? 0x30ff60 : 0x661010);
+    rec.glow.visible = !o.disabled;
     rec.glow.material.color.setHex(o.on ? 0x40ff70 : 0xff3020);
     rec.glow.material.opacity = o.on ? 0.6 : 0.3;
     if (p.top) { p.top.material.color.setHex(o.on ? 0x30d060 : 0x884422); p.top.position.y = o.pressed ? 0.04 : 0.08; }
     if (p.arm && o.style === 'pump') p.arm.rotation.z = o.on ? -0.4 : 0.3;
     else if (p.arm) p.arm.rotation.x = o.on ? -0.8 : 0.8;
+  } else if (o.kind === 'furnace') {
+    p.mouth.material.color.setHex(o.lit ? 0xff6a10 : 0x220a04);
+    p.glow.material.opacity = o.lit ? 0.75 : 0;
+  } else if (o.kind === 'pipevalve') {
+    p.wheel.rotation.z = o.val * 2.1;
+    p.arrow.rotation.z = [Math.PI / 2, 0, -Math.PI / 2][o.val] || 0;
+  } else if (o.kind === 'puzzleboard') {
+    p.cells.forEach((c, k) => c.material.color.setHex(k < (o.placed || 0) ? [0xe85a5a, 0x5ab0e8, 0xe8d05a, 0x7ae85a, 0xc05ae8, 0xe8905a][k] : 0x2a2a2a));
+  } else if (o.kind === 'shelf') {
+    p.seat.clear();
+    if (o.toy) { const t = new THREE.Mesh(new THREE.SphereGeometry(0.16, 10, 8), lam({ bear: 0x8a5a2a, bunny: 0xe8e8e0, duck: 0xffd020 }[o.toy] || 0xffffff)); t.position.y = 0.16; p.seat.add(t); }
+  } else if (o.kind === 'ending') {
+    p.halo.material.opacity = o.active ? 0.7 : 0;
   } else if (o.kind === 'steamvalve') {
     p.lampV.material.color.setHex(o.on ? 0x30ff60 : 0x661010);
   } else if (o.kind === 'altar') {
@@ -520,6 +668,10 @@ export function animateObjects(dt) {
     }
     if (o.kind === 'switch' && o.on && rec.parts.vib) rec.group.position.x = o.x + Math.sin(S.time * 60) * 0.01;
     if (o.kind === 'steamvalve' && o.on) rec.parts.wheel.rotation.z += dt * 0.6;
+    if (o.kind === 'switch' && o.style === 'swing' && o.on) rec.parts.swing.rotation.x = Math.sin(S.time * 2.6) * 0.7;
+    if (o.kind === 'musicbox' && o.playing) rec.parts.dancer.rotation.y += dt * 2;
+    if (o.kind === 'furnace' && o.lit) rec.parts.glow.material.opacity = 0.6 + Math.sin(S.time * 9 + o.x) * 0.12;
+    if (o.kind === 'cardreader') rec.parts.led.material.color.setHex(Math.sin(S.time * 3) > 0 ? 0xff2020 : 0x401010);
     if (o.kind === 'switch' && o.style === 'pump' && o.on) rec.parts.arm.rotation.z = Math.sin(S.time * 6) * 0.35;
     if (rec.ring) rec.parts.glow.material.opacity = Math.sin(S.time * 1.3 + o.x) > 0.93 ? 0.6 : 0;
     if (o.kind === 'altar' && !o.used) rec.parts.flame.scale.setScalar(2.2 + Math.sin(S.time * 9) * 0.15);

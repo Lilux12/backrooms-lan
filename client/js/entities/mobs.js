@@ -4,6 +4,7 @@ import { clamp, lerpAngle } from '../core/util.js';
 import { S, me } from '../core/state.js';
 import { camera, scene } from '../render/scene.js';
 import { basic, glowSprite, lam } from '../render/textures.js';
+import { playAt, sfx } from '../audio/audio.js';
 import { limb } from './avatars.js';
 
 // Существа
@@ -201,14 +202,22 @@ function makeMob(type) {
   g.visible = false; scene.add(g);
   return { group: g, parts, type, x: 0, y: 0, z: 0, r: 0, tx: 0, ty: 0, tz: 0, tr: 0, chase: false, stun: false, seen: false, walk: 0 };
 }
+// Убрать модель и освободить её геометрию и материалы (общие текстуры лиц остаются)
+function dropMob(mo) {
+  scene.remove(mo.group);
+  mo.group.traverse((o) => {
+    if (o.geometry) o.geometry.dispose();
+    for (const m of [].concat(o.material || [])) if (m && !(m.map && Object.values(faceTex).includes(m.map))) m.dispose();
+  });
+}
 // Оставить только первые n существ
 export function ensureMobs(n) {
-  while (mobEnts.length > n) scene.remove(mobEnts.pop().group);
+  while (mobEnts.length > n) dropMob(mobEnts.pop());
 }
 // Существо с номером i нужного типа (модель пересоздаётся, если тип сменился)
 export function ensureMob(i, type) {
   while (mobEnts.length <= i) mobEnts.push(makeMob(type));
-  if (mobEnts[i].type !== type) { scene.remove(mobEnts[i].group); mobEnts[i] = makeMob(type); }
+  if (mobEnts[i].type !== type) { dropMob(mobEnts[i]); mobEnts[i] = makeMob(type); }
   return mobEnts[i];
 }
 
@@ -271,5 +280,15 @@ export function updateMobs(dt) {
   for (const mo of mobEnts) if (mo.seen && !mo.stun) mobDist = Math.min(mobDist, Math.hypot(mo.x - camera.position.x, (mo.y + 1.6 - camera.position.y) * 2, mo.z - camera.position.z)); // слышно «ушами» камеры (и зрителю)
   return mobDist;
 }
-// Общее для всех: невидим, если оглушён или прячется (Червь в трубах, Утопленник без воды)
-function continue_common(mo) { mo.group.visible = !mo.stun; }
+// Общее для всех: невидим, если оглушён или прячется (Червь в трубах, Утопленник без воды).
+// Шаги и голоса существ звучат из их точки (3D-звук): по ним можно понять, откуда идут.
+function continue_common(mo) {
+  mo.group.visible = !mo.stun;
+  if (mo.stun) return;
+  const d = Math.hypot(mo.x - camera.position.x, mo.z - camera.position.z);
+  if (d > 32) return;
+  const ph = Math.floor(mo.walk / Math.PI);
+  if (ph !== mo.stepPh) { mo.stepPh = ph; playAt(mo.x, mo.y + 0.3, mo.z, () => sfx.mobStep(mo.type, 1)); }
+  mo.voiceT = (mo.voiceT || 4 + Math.random() * 6) - 1 / 60;
+  if (mo.voiceT <= 0) { mo.voiceT = (mo.chase ? 3 : 8) + Math.random() * 6; playAt(mo.x, mo.y + 1.8, mo.z, () => sfx.mobVoice(mo.type, mo.chase ? 1 : 0.6)); }
+}

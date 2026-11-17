@@ -169,6 +169,9 @@ const HANDLERS = {
   say: (G, c, a) => broadcast({ t: 'say', text: a.text, by: c.name }),
 
   level: (G, c, a, api) => api.startLevel(a.v),
+  difficulty: (G, c, a) => { state.difficulty = a.v; G.difficulty = a.v; }, // скорость и правила — сразу, аптечки — со следующего уровня
+  daily: (G, c, a) => { state.daily = !!a.on; },
+  modifiers: (G, c, a) => { state.modsOn = !!a.on; },
   seed: (G, c, a, api) => api.startLevel(G.idx, a.v),
   restart: (G, c, a, api) => api.startLevel(G.idx),
   skip: (G, c, a, api) => api.startLevel(G.idx === BR.LEVELS.length - 1 ? 0 : G.idx + 1),
@@ -245,12 +248,12 @@ const HANDLERS = {
 
   fireworks: (G, c) => broadcast({ t: 'fx', kind: 'fireworks', x: c.x, y: c.y, z: c.z }),
   confetti: (G, c) => broadcast({ t: 'fx', kind: 'confetti', x: c.x, y: c.y, z: c.z }),
-  boom: (G, c) => {
+  boom: (G, c, a, api) => {
     const p = ahead(G, c, 3);
     broadcast({ t: 'fx', kind: 'boom', x: p.x, y: p.y, z: p.z });
     for (const q of joinedList()) {
       const d = Math.hypot(q.x - p.x, q.z - p.z);
-      if (d < 7 && !q.dead) q.send({ t: 'knock', vx: (q.x - p.x) / (d || 1) * 9, vy: 7, vz: (q.z - p.z) / (d || 1) * 9 });
+      if (d < 7 && !q.dead) { api.grace(q, 2500); q.send({ t: 'knock', vx: (q.x - p.x) / (d || 1) * 9, vy: 7, vz: (q.z - p.z) / (d || 1) * 9 }); }
     }
     for (const m of G.mobs) if (Math.hypot(m.x - p.x, m.z - p.z) < 8) m.stun = 5;
   },
